@@ -1,0 +1,9 @@
+{
+ "source": "embedded protocol assets",
+ "files": [
+  "command_responses.json",
+  "command_contract.json",
+  "argcode_table.json",
+  "config_wire/"
+ ]
+}

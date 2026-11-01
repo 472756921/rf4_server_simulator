@@ -1,0 +1,85 @@
+{
+ "schema_version": 1,
+ "source": {
+  "kind": "user-pasted",
+  "table": "各个地图的价格倍率",
+  "column_used": "鱼市"
+ },
+ "unit": "ratio（相对基准水域，1.0 = 100%）",
+ "note": "鱼市价格 = 基准价（鱼种、档位、重量）× 水域倍率。",
+ "caveat": "本文件只定义鱼市倍率，其他商店价格由各自配置提供。",
+ "by_map_key": {
+  "level_001_lake": {
+   "map": "克马羚诺也湖",
+   "market_pct": 0.831
+  },
+  "level_019_american_pond": {
+   "map": "埃尔克湖",
+   "market_pct": 0.831
+  },
+  "level_002_kirzah_river": {
+   "map": "惟有诺克河",
+   "market_pct": 0.831
+  },
+  "level_004_torfyanoe_ozero": {
+   "map": "旧奥斯特罗格湖",
+   "market_pct": 0.916
+  },
+  "level_010_belaya": {
+   "map": "白河",
+   "market_pct": 0.916
+  },
+  "level_003_viiveri_lake": {
+   "map": "阔里湖",
+   "market_pct": 0.916
+  },
+  "level_007_grass_lake": {
+   "map": "梅德韦杰湖",
+   "market_pct": 0.958
+  },
+  "level_005_volhov": {
+   "map": "沃尔霍夫河",
+   "market_pct": 0.958
+  },
+  "level_013_sev_don": {
+   "map": "北顿涅茨河",
+   "market_pct": 0.967
+  },
+  "level_008_sura_river": {
+   "map": "苏拉河",
+   "market_pct": 0.976
+  },
+  "level_006_ladoga": {
+   "map": "拉加多湖",
+   "market_pct": 1.0
+  },
+  "level_014_carp_lake": {
+   "map": "琥珀湖",
+   "market_pct": 1.0
+  },
+  "level_011_ladoga_02": {
+   "map": "拉加多湖群岛",
+   "market_pct": 1.0
+  },
+  "level_009_ahtuba": {
+   "map": "阿赫图巴河",
+   "market_pct": 1.0
+  },
+  "level_018_moskitnoe": {
+   "map": "铜湖",
+   "market_pct": 1.0
+  },
+  "level_015_tunguska": {
+   "map": "下通古斯卡河",
+   "market_pct": 1.0
+  },
+  "level_016_yama": {
+   "map": "亚马河",
+   "market_pct": 1.0
+  },
+  "level_012_north_sea": {
+   "map": "挪威海",
+   "market_pct": 1.0
+  }
+ }
+}

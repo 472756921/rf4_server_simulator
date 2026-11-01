@@ -1,0 +1,133 @@
+{
+ "items": [
+  {
+   "item_id": "shirt_35002"
+  },
+  {
+   "item_id": "spinner_2713"
+  },
+  {
+   "item_id": "worm_01",
+   "qty": 119
+  },
+  {
+   "item_id": "lb_bottle_trad",
+   "qty": 1
+  },
+  {
+   "item_id": "orig_20008_16"
+  },
+  {
+   "item_id": "loaf_01",
+   "qty": 8
+  },
+  {
+   "item_id": "ff_pork_canned",
+   "qty": 1
+  },
+  {
+   "item_id": "papermap_komar_01"
+  },
+  {
+   "item_id": "ff_saira_canned",
+   "qty": 1
+  },
+  {
+   "item_id": "mono_15065",
+   "qty": 120
+  },
+  {
+   "item_id": "spin_10001_S60L"
+  },
+  {
+   "item_id": "msinkset_30015",
+   "qty": 42
+  },
+  {
+   "item_id": "bob_25165"
+  },
+  {
+   "item_id": "orig_20008_14"
+  },
+  {
+   "item_id": "worm_01",
+   "qty": 1
+  },
+  {
+   "item_id": "papermap_losinoe"
+  },
+  {
+   "item_id": "lb_bottle_lim",
+   "qty": 1
+  },
+  {
+   "item_id": "spinnerbaits_1244"
+  },
+  {
+   "item_id": "spinnerbaits_1103"
+  },
+  {
+   "item_id": "spin_5820"
+  },
+  {
+   "item_id": "ef_land_net_2m"
+  },
+  {
+   "item_id": "bob_25164"
+  },
+  {
+   "item_id": "b_cap_35003"
+  },
+  {
+   "item_id": "tele_10012_tl16"
+  },
+  {
+   "item_id": "orig_20008_16"
+  },
+  {
+   "item_id": "mono_15065",
+   "qty": 120
+  },
+  {
+   "item_id": "spinner_2712"
+  },
+  {
+   "item_id": "orig_20008_16"
+  },
+  {
+   "item_id": "bread",
+   "qty": 30
+  },
+  {
+   "item_id": "jeans_35004"
+  },
+  {
+   "item_id": "bloodworm",
+   "qty": 30
+  },
+  {
+   "item_id": "boot_35001"
+  },
+  {
+   "item_id": "spinnerbaits_1118"
+  }
+ ],
+ "shortcuts": [
+  {
+   "slot": 4,
+   "item_id": "tele_10012_tl16"
+  },
+  {
+   "slot": 8,
+   "item_id": "boot_35001"
+  },
+  {
+   "slot": 7,
+   "item_id": "jeans_35004"
+  },
+  {
+   "slot": 6,
+   "item_id": "shirt_35002"
+  }
+ ]
+}

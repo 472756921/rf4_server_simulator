@@ -1,0 +1,61 @@
+# rf4server 配置模板。
+# 复制为 config.yaml，并替换所有密钥占位值。
+# config.yaml 已被 .gitignore 排除。
+
+env: dev             # 运行环境标识：dev | prod
+log:
+  level: info        # 日志级别：debug | info | warn | error
+  format: text       # 日志格式：text | json
+
+sqlite:
+  path: "data/rf4server.db"                  # 所有服务进程共享的主数据库。
+  static_path: "server_data/static.sqlite3" # 运行时以只读方式附加的静态目录。
+
+gateway:
+  login_addr: ":443"                  # HTTPS 登录监听地址。
+  realtime_addr: ":9341"              # 游戏客户端 realtime 监听地址。
+  cert_file: "certs/server.crt"       # HTTPS 证书；缺失时自动生成。
+  key_file: "certs/server.key"        # HTTPS 私钥；缺失时自动生成。
+  advertise_host: "127.0.0.1"         # 登录应答中返回给客户端的 realtime 主机。
+  advertise_port: 9341                # 登录应答中返回给客户端的 realtime 端口。
+  region: "CN"                        # 客户端区域值。
+  server_name: "RF4_566"              # 登录应答中返回的服务器名称。
+  login_domain: "api.rf4game.ru"      # 主登录域名及证书主题。
+  max_conns: 512                      # realtime 最大并发连接数。
+  ack_client_frames: true             # 处理客户端帧前先发送协议 ACK。
+  transport_keepalive_sec: 5.0        # 空传输帧保活间隔（秒）。
+  obs_addr: ":9501"                   # 健康检查、指标和性能分析监听地址。
+  tunnel:
+    addr: "127.0.0.1:9401"                          # gameserver 内部隧道地址。
+    psk: "replace-with-shared-random-secret"        # 必须与 game.tunnel.psk 一致。
+
+  # 运行参数默认值，钓鱼限制可通过管理后台覆盖。
+  token_ttl_days: 365                 # 登录 token 有效期（天）。
+  userid_start: 1000001               # 登录服务分配的第一个 user ID。
+  bite_probability: 1.0               # 每次抛竿出鱼的概率；1.0 表示每次都有鱼。
+  bite_delay_scale: 1.0               # 标准咬钩延迟分布的倍率。
+  bite_delay_fixed: 0                 # 固定咬钩延迟（秒）；大于 0 时不再使用分布。
+  keepalive_interval_sec: 5.0         # 世界时钟推送间隔（秒）；应小于 10 秒。
+
+game:
+  tunnel:
+    addr: "127.0.0.1:9401"                          # 内部隧道监听地址。
+    psk: "replace-with-shared-random-secret"        # 必须与 gateway.tunnel.psk 一致。
+  obs_addr: ":9502"                   # 健康检查、指标和性能分析监听地址。
+  default_userid: 1000001             # seed 创建的玩家档案 user ID。
+  keepalive_interval_sec: 5.0         # 世界时钟推送间隔（秒）。
+
+admin:
+  http_addr: ":8080"                          # 管理后台监听地址。
+  jwt_secret: "replace-with-long-random-secret"  # 管理员会话 token 的签名密钥。
+  obs_addr: ":9503"                           # 健康检查、指标和性能分析监听地址。
+  username: "admin"                           # 管理员用户名。
+  password: "replace-with-strong-password"   # 管理员密码；每次启动 admin 时应用。
+
+# 支持的环境变量覆盖：
+# RF4_LOG_LEVEL、RF4_LOG_FORMAT、RF4_SQLITE_PATH、RF4_SQLITE_STATIC_PATH、
+# RF4_GATEWAY_LOGIN_ADDR、RF4_GATEWAY_REALTIME_ADDR、RF4_GATEWAY_ADVERTISE_HOST、
+# RF4_GATEWAY_CERT、RF4_GATEWAY_KEY、RF4_TUNNEL_ADDR、RF4_TUNNEL_PSK、
+# RF4_GAME_TUNNEL_PSK、RF4_ADMIN_HTTP_ADDR、RF4_ADMIN_JWT_SECRET、
+# RF4_GATEWAY_KEEPALIVE_SEC、RF4_KEEPALIVE_INTERVAL_SEC、
+# RF4_BITE_PROBABILITY、RF4_GATEWAY_MAX_CONNS。

@@ -1,0 +1,30 @@
+-- 钓鱼会话快照：gameserver 硬重启后恢复 pending/timer 语义。
+-- timer 与 mutex 不落库；BiteAt 是原定时器应触发的绝对时刻。
+CREATE TABLE IF NOT EXISTS fishing_state(
+    uid              INTEGER PRIMARY KEY,
+    gear_guid        TEXT NOT NULL DEFAULT '',
+    rig_type         INTEGER NOT NULL DEFAULT 0,
+    loc              TEXT NOT NULL DEFAULT '',
+    spot             INTEGER NOT NULL DEFAULT 0,
+    depth_cm         INTEGER NOT NULL DEFAULT 0,
+    cast_active      INTEGER NOT NULL DEFAULT 0,
+    cast_ts_ns       INTEGER NOT NULL DEFAULT 0,
+    fall_ts_ns       INTEGER NOT NULL DEFAULT 0,
+    fall_seen        INTEGER NOT NULL DEFAULT 0,
+    rig_settled      INTEGER NOT NULL DEFAULT 0,
+    tick_seen        INTEGER NOT NULL DEFAULT 0,
+    tick_seq         INTEGER NOT NULL DEFAULT 0,
+    last_anim        INTEGER NOT NULL DEFAULT 0,
+    push_sent        INTEGER NOT NULL DEFAULT 0,
+    hooked           INTEGER NOT NULL DEFAULT 0,
+    resolved         INTEGER NOT NULL DEFAULT 0,
+    pending_json     TEXT,
+    bait             TEXT NOT NULL DEFAULT '',
+    last_skill       INTEGER NOT NULL DEFAULT 0,
+    armed_json       TEXT,
+    bite_speed       REAL NOT NULL DEFAULT 1.0,
+    trophy_luck      REAL NOT NULL DEFAULT 0.0,
+    fight_tolerance  REAL NOT NULL DEFAULT 0.0,
+    bite_at_ns       INTEGER NOT NULL DEFAULT 0,
+    updated_ts       REAL NOT NULL DEFAULT 0.0
+);

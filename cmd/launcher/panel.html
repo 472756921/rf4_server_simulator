@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>fish-localserver 控制面板</title>
+<style>
+:root{--bg:#0f1419;--panel:#1a2129;--line:#2a3442;--fg:#d8e1ea;--dim:#7d8b9c;--ok:#22c55e;--warn:#eab308;--bad:#ef4444;--acc:#3b82f6}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font:14px/1.6 "Segoe UI",system-ui,sans-serif;padding:18px}
+h1{font-size:18px;display:flex;align-items:center;gap:10px}
+h1 .dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.card b{font-size:16px}
+.state{float:right;font-size:12px;padding:2px 10px;border-radius:99px}
+.state.running{background:#14532d40;color:var(--ok)}
+.state.starting,.state.backoff{background:#713f1240;color:var(--warn)}
+.state.stopped,.state.failed{background:#7f1d1d40;color:var(--bad)}
+.meta{color:var(--dim);font-size:12px;margin:6px 0 10px}
+.btns{display:flex;gap:6px}
+button{cursor:pointer;background:#0d1117;border:1px solid var(--line);border-radius:6px;color:var(--fg);padding:5px 12px;font-size:12px}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border:none;color:#fff}
+.bar{display:flex;gap:8px;margin-bottom:14px}
+.logs{display:grid;grid-template-columns:1fr;gap:10px}
+.log{background:#0d1117;border:1px solid var(--line);border-radius:8px}
+.log h3{font-size:12px;color:var(--dim);padding:6px 10px;border-bottom:1px solid var(--line)}
+.log pre{height:180px;overflow:auto;padding:8px 10px;font:11px/1.5 Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+a{color:var(--acc)}
+</style>
+</head>
+<body>
+<h1><span class="dot" id="dot"></span>fish-localserver 控制面板
+  <span style="font-size:12px;color:var(--dim)">本地服务器监督器</span></h1>
+<div class="bar">
+  <button class="pri" onclick="act('start','')">启动全部</button>
+  <button onclick="act('stop','')">停止全部</button>
+  <button onclick="act('restart','')">重启全部</button>
+  <button onclick="fetch('/api/open-admin',{method:'POST'})">打开管理后台</button>
+</div>
+<div class="grid" id="cards"></div>
+<div class="logs" id="logs"></div>
+<script>
+const NAMES = ["gameserver","gateway","admin"];
+const logs = {};   // name -> {next, el}
+let ready = false;
+
+async function refresh(){
+  try{
+    const st = await (await fetch("/api/status")).json();
+    renderCards(st);
+    if(!ready){ renderLogs(); ready = true; }
+    for(const n of NAMES) pullLogs(n);
+  }catch(e){}
+}
+function renderCards(st){
+  const dot = document.getElementById("dot");
+  const running = st.procs.filter(p=>p.state==="running").length;
+  dot.style.background = running===3 ? "var(--ok)" : running>0 ? "var(--warn)" : "var(--bad)";
+  document.getElementById("cards").innerHTML = st.procs.map(p=>{
+    const cls = ["running","starting","backoff","stopped","failed"].includes(p.state)?p.state:"stopped";
+    const zh = {running:"运行中",starting:"启动中",backoff:"等待重启",stopped:"已停止",failed:"失败"}[p.state]||p.state;
+    return `<div class="card"><b>${p.name}</b><span class="state ${cls}">${zh}</span>
+      <div class="meta">PID ${p.pid||"-"} · 重启 ${p.restarts} 次 · 运行 ${Math.floor(p.uptime_s)}s</div>
+      <div class="btns">
+        <button onclick="act('start','${p.name}')">启动</button>
+        <button onclick="act('stop','${p.name}')">停止</button>
+        <button onclick="act('restart','${p.name}')">重启</button>
+      </div></div>`;
+  }).join("");
+}
+function renderLogs(){
+  document.getElementById("logs").innerHTML = NAMES.map(n=>
+    `<div class="log"><h3>${n}.log</h3><pre id="log-${n}"></pre></div>`).join("");
+  NAMES.forEach(n=>logs[n]={next:0,el:document.getElementById("log-"+n)});
+}
+async function pullLogs(n){
+  const slot = logs[n]; if(!slot) return;
+  try{
+    const r = await (await fetch(`/api/logs?name=${n}&since=${slot.next}`)).json();
+    if(r.lines && r.lines.length){
+      slot.el.textContent = (slot.el.textContent + "\n" + r.lines.join("\n")).split("\n").slice(-400).join("\n");
+      slot.el.scrollTop = slot.el.scrollHeight;
+    }
+    slot.next = r.next;
+  }catch(e){}
+}
+async function act(action, name){
+  await fetch(`/api/${action}?name=${encodeURIComponent(name)}`, {method:"POST"});
+  setTimeout(refresh, 600);
+}
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

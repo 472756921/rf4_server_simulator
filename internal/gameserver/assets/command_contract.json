@@ -1,0 +1,2780 @@
+{
+ "_doc": "命令响应与推送参数契约：resp 描述响应类型，push_args 描述允许的推送参数形状。",
+ "by_key": {
+  "1/1": {
+   "names": [
+    "game/version"
+   ],
+   "method": "fanpebifhok",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "string"
+    ],
+    "type_ids": []
+   }
+  },
+  "1/2": {
+   "names": [
+    "game/time"
+   ],
+   "method": "feamcopbmcp",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "long"
+    ],
+    "type_ids": []
+   }
+  },
+  "1/4": {
+   "names": [
+    "game/configs"
+   ],
+   "method": "eodgbiejbjj",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "byte"
+    ],
+    "type_ids": []
+   }
+  },
+  "1/5": {
+   "names": [
+    "game/configs_version"
+   ],
+   "method": "haoenplojac",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "string"
+    ],
+    "type_ids": []
+   }
+  },
+  "1/6": {
+   "names": [
+    "game/issue_token"
+   ],
+   "method": "jnejfelnmkd",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "string"
+    ],
+    "type_ids": []
+   }
+  },
+  "1/7": {
+   "names": [
+    "game/locale"
+   ],
+   "method": "plodhccjjhh"
+  },
+  "1/8": {
+   "names": [
+    "game/queryP"
+   ],
+   "method": "plnefhhfinh"
+  },
+  "1/9": {
+   "names": [
+    "game/check"
+   ],
+   "method": "iaknkffcgfi"
+  },
+  "1/10": {
+   "names": [
+    "gljbapdpdkg"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "djpmeflcchp"
+    ],
+    "type_ids": [
+     15003
+    ]
+   }
+  },
+  "1/12": {
+   "names": [
+    "game/place"
+   ],
+   "method": "dnpmfjelapg",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "kaeddljglhl"
+    ],
+    "type_ids": [
+     205
+    ]
+   }
+  },
+  "1/13": {
+   "names": [
+    "game/pos"
+   ],
+   "method": "fdmicdnmbgb",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "ehkpjofhbfg"
+    ],
+    "type_ids": [
+     206
+    ]
+   }
+  },
+  "1/15": {
+   "names": [
+    "fpnepocljdi"
+   ]
+  },
+  "1/16": {
+   "names": [
+    "ofbjkojmjag"
+   ]
+  },
+  "1/18": {
+   "names": [
+    "iemomknpjbd"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "bool"
+    ],
+    "type_ids": []
+   }
+  },
+  "2/1": {
+   "names": [
+    "push:profile"
+   ]
+  },
+  "2/2": {
+   "names": [
+    "push:profile"
+   ]
+  },
+  "2/3": {
+   "names": [
+    "push:profile"
+   ]
+  },
+  "2/4": {
+   "names": [
+    "push:profile"
+   ]
+  },
+  "2/5": {
+   "names": [
+    "push:profile"
+   ]
+  },
+  "2/6": {
+   "names": [
+    "push:profile"
+   ]
+  },
+  "2/8": {
+   "names": [
+    "push:profile"
+   ]
+  },
+  "2/9": {
+   "names": [
+    "push:profile"
+   ]
+  },
+  "2/10": {
+   "names": [
+    "push:profile"
+   ]
+  },
+  "2/11": {
+   "names": [
+    "push:profile"
+   ]
+  },
+  "2/12": {
+   "names": [
+    "push:profile"
+   ]
+  },
+  "2/13": {
+   "names": [
+    "push:profile"
+   ]
+  },
+  "2/14": {
+   "names": [
+    "push:profile"
+   ]
+  },
+  "2/15": {
+   "names": [
+    "push:profile"
+   ]
+  },
+  "2/16": {
+   "names": [
+    "push:profile"
+   ]
+  },
+  "3/1": {
+   "names": [
+    "player/profile"
+   ],
+   "method": "chfcceiadie",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "pjhgpkgpjih"
+    ],
+    "type_ids": [
+     307
+    ]
+   }
+  },
+  "3/2": {
+   "names": [
+    "player/fish_stats"
+   ],
+   "method": "hgegjnjafcn",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "ilhlknehckb"
+    ],
+    "type_ids": [
+     321
+    ]
+   }
+  },
+  "3/3": {
+   "names": [
+    "player/achievements"
+   ],
+   "method": "oeihadiimia",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "hpkbgahniab"
+    ],
+    "type_ids": [
+     305
+    ]
+   }
+  },
+  "3/6": {
+   "names": [
+    "ckfocaolppf"
+   ]
+  },
+  "3/7": {
+   "names": [
+    "player/check_ticket"
+   ],
+   "method": "oahfgalcepa",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "ckdficiaaji"
+    ],
+    "type_ids": [
+     162
+    ]
+   }
+  },
+  "3/8": {
+   "names": [
+    "player/training_status"
+   ],
+   "method": "kjghjdbnehm"
+  },
+  "3/9": {
+   "names": [
+    "player/vital_step"
+   ],
+   "method": "pbodjcpbcdi"
+  },
+  "3/10": {
+   "names": [
+    "player/boat_use"
+   ],
+   "method": "demidnaaank"
+  },
+  "3/11": {
+   "names": [
+    "player/campfire_start"
+   ],
+   "method": "lbdjociiafl",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "gdalkjnfiep"
+    ],
+    "type_ids": [
+     802
+    ]
+   }
+  },
+  "3/12": {
+   "names": [
+    "player/fall_under_water"
+   ],
+   "method": "kmpdmmojjhp"
+  },
+  "3/13": {
+   "names": [
+    "player/kitchen_eat"
+   ],
+   "method": "aimhjifampo",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "3/14": {
+   "names": [
+    "player/tackle_aid"
+   ],
+   "method": "ofpmfnhalkg",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "3/15": {
+   "names": [
+    "player/tackle_aid_spin"
+   ],
+   "method": "ppkfnndchcp",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "3/16": {
+   "names": [
+    "cfbomeockod"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "iidloljandl"
+    ],
+    "type_ids": [
+     2015
+    ]
+   }
+  },
+  "3/17": {
+   "names": [
+    "player/fish_trophies"
+   ],
+   "method": "chiebbnmnkf",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "lhlbclekmin"
+    ],
+    "type_ids": [
+     323
+    ]
+   }
+  },
+  "3/18": {
+   "names": [
+    "player/warnings"
+   ],
+   "method": "jopmhkjknlb",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "lcjmijeeebm"
+    ],
+    "type_ids": []
+   }
+  },
+  "3/19": {
+   "names": [
+    "player/read_warning"
+   ],
+   "method": "ckppclbegon",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "3/20": {
+   "names": [
+    "player/change_name"
+   ],
+   "method": "dcddpnjegbk",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pjhgpkgpjih"
+    ],
+    "type_ids": [
+     307
+    ]
+   }
+  },
+  "3/21": {
+   "names": [
+    "player/change_region"
+   ],
+   "method": "mpjcdcoimif",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pjhgpkgpjih"
+    ],
+    "type_ids": [
+     307
+    ]
+   }
+  },
+  "3/22": {
+   "names": [
+    "pckcdcpghbh"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "string"
+    ],
+    "type_ids": []
+   }
+  },
+  "3/23": {
+   "names": [
+    "dlndednekdl"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pjhgpkgpjih"
+    ],
+    "type_ids": [
+     307
+    ]
+   }
+  },
+  "3/24": {
+   "names": [
+    "kffeojjoiap"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "3/25": {
+   "names": [
+    "player/ban_submit"
+   ],
+   "method": "dkfcpajpceg",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "gejoepggocf"
+    ],
+    "type_ids": [
+     304
+    ]
+   }
+  },
+  "3/26": {
+   "names": [
+    "player/ban_info"
+   ],
+   "method": "nfeohdlgikg",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "gejoepggocf"
+    ],
+    "type_ids": [
+     304
+    ]
+   }
+  },
+  "3/27": {
+   "names": [
+    "player/guitar_play"
+   ],
+   "method": "kpoopcjfkog"
+  },
+  "3/28": {
+   "names": [
+    "glonlbdjadi"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "hoakpnkikjg"
+    ],
+    "type_ids": [
+     13022
+    ]
+   }
+  },
+  "3/29": {
+   "names": [
+    "onkfgefhlmd"
+   ]
+  },
+  "3/30": {
+   "names": [
+    "oijhgekncpo"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "3/31": {
+   "names": [
+    "anmllkbbgke"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "3/32": {
+   "names": [
+    "ahfcgnafglo"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "3/33": {
+   "names": [
+    "pikfphffhkm"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "3/35": {
+   "names": [
+    "fmmbakkighp"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "3/36": {
+   "names": [
+    "bjleglakenj"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "bkcgemhagon"
+    ],
+    "type_ids": [
+     501
+    ]
+   }
+  },
+  "3/37": {
+   "names": [
+    "eelajfjfiac"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pjhgpkgpjih"
+    ],
+    "type_ids": [
+     307
+    ]
+   }
+  },
+  "3/38": {
+   "names": [
+    "elopgepoged"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pjhgpkgpjih"
+    ],
+    "type_ids": [
+     307
+    ]
+   }
+  },
+  "3/39": {
+   "names": [
+    "plopofeioap"
+   ]
+  },
+  "3/40": {
+   "names": [
+    "cchhefhdkfa"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "iidloljandl"
+    ],
+    "type_ids": [
+     2015
+    ]
+   }
+  },
+  "3/41": {
+   "names": [
+    "ikbpbdkbflj"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "onobdmohahp"
+    ],
+    "type_ids": [
+     132
+    ]
+   }
+  },
+  "4/1": {
+   "names": [
+    "items/info"
+   ],
+   "method": "dnmfmkmbgok",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "nicjmgdnood"
+    ],
+    "type_ids": [
+     133
+    ]
+   }
+  },
+  "4/4": {
+   "names": [
+    "items/list"
+   ],
+   "method": "nafkinpcind",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "Guid"
+    ],
+    "type_ids": []
+   }
+  },
+  "4/5": {
+   "names": [
+    "items/get"
+   ],
+   "method": "gepffnlgfpm",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "onobdmohahp",
+     "blpddffbgjg",
+     "ecknbkpeeji",
+     "kbnbcppjkaf"
+    ],
+    "type_ids": [
+     132,
+     115,
+     25,
+     100
+    ]
+   }
+  },
+  "4/6": {
+   "names": [
+    "items/move"
+   ],
+   "method": "kjojjfnabfe",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "4/7": {
+   "names": [
+    "items/remove"
+   ],
+   "method": "ndebnoanonb",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "4/8": {
+   "names": [
+    "items/use"
+   ],
+   "method": "ljbipgaecel",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "4/9": {
+   "names": [
+    "items/suflag"
+   ],
+   "method": "amlaccoolch",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "4/10": {
+   "names": [
+    "lojhodeamja"
+   ]
+  },
+  "4/20": {
+   "names": [
+    "push:items"
+   ]
+  },
+  "4/21": {
+   "names": [
+    "push:items"
+   ]
+  },
+  "4/22": {
+   "names": [
+    "push:items"
+   ]
+  },
+  "5/1": {
+   "names": [
+    "skills/get"
+   ],
+   "method": "mdifmpcifka",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "hbhfmnncgfk"
+    ],
+    "type_ids": [
+     311
+    ]
+   }
+  },
+  "5/2": {
+   "names": [
+    "skills/learn"
+   ],
+   "method": "gdbbicnhbop",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "hbhfmnncgfk"
+    ],
+    "type_ids": [
+     311
+    ]
+   }
+  },
+  "5/3": {
+   "names": [
+    "skills/reset"
+   ],
+   "method": "abmakpdddfm",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "hbhfmnncgfk"
+    ],
+    "type_ids": [
+     311
+    ]
+   }
+  },
+  "5/4": {
+   "names": [
+    "skills/reset_all"
+   ],
+   "method": "hepfigacnfp",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "hbhfmnncgfk"
+    ],
+    "type_ids": [
+     311
+    ]
+   }
+  },
+  "6/1": {
+   "names": [
+    "comp/list"
+   ],
+   "method": "fboebdbmabe",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "ngojnfbjbld"
+    ],
+    "type_ids": [
+     1
+    ]
+   }
+  },
+  "6/2": {
+   "names": [
+    "comp/load"
+   ],
+   "method": "gngegcjdbnj",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "ngojnfbjbld"
+    ],
+    "type_ids": [
+     1
+    ]
+   }
+  },
+  "6/3": {
+   "names": [
+    "comp/results"
+   ],
+   "method": "ebegeidlcag",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "oncbocpddcj"
+    ],
+    "type_ids": [
+     4
+    ]
+   }
+  },
+  "6/4": {
+   "names": [
+    "comp/create"
+   ],
+   "method": "dcmlpddjkcg",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "ngojnfbjbld"
+    ],
+    "type_ids": [
+     1
+    ]
+   }
+  },
+  "6/5": {
+   "names": [
+    "comp/change"
+   ],
+   "method": "giplpjjadln",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "ngojnfbjbld"
+    ],
+    "type_ids": [
+     1
+    ]
+   }
+  },
+  "6/6": {
+   "names": [
+    "comp/kick"
+   ],
+   "method": "hnaicigohgg",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "ngojnfbjbld"
+    ],
+    "type_ids": [
+     1
+    ]
+   }
+  },
+  "6/7": {
+   "names": [
+    "comp/join"
+   ],
+   "method": "adjghanofhk",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "ngojnfbjbld"
+    ],
+    "type_ids": [
+     1
+    ]
+   }
+  },
+  "6/8": {
+   "names": [
+    "comp/leave"
+   ],
+   "method": "hegeepffkai",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "6/9": {
+   "names": [
+    "comp/change_team"
+   ],
+   "method": "biafnkmckef",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "6/10": {
+   "names": [
+    "comp/set_ready"
+   ],
+   "method": "chaednmfhgk",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "6/11": {
+   "names": [
+    "comp/message"
+   ],
+   "method": "djicomaekha"
+  },
+  "6/12": {
+   "names": [
+    "comp/start"
+   ],
+   "method": "fekboeegmkj",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "6/13": {
+   "names": [
+    "comp/test_create"
+   ],
+   "method": "mbgcogneeim",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "ngojnfbjbld"
+    ],
+    "type_ids": [
+     1
+    ]
+   }
+  },
+  "6/14": {
+   "names": [
+    "comp/test_join"
+   ],
+   "method": "ehajkpnkdej",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "ngojnfbjbld"
+    ],
+    "type_ids": [
+     1
+    ]
+   }
+  },
+  "6/15": {
+   "names": [
+    "push:comp"
+   ]
+  },
+  "6/16": {
+   "names": [
+    "push:comp"
+   ]
+  },
+  "6/17": {
+   "names": [
+    "push:comp"
+   ]
+  },
+  "6/18": {
+   "names": [
+    "push:comp"
+   ]
+  },
+  "8/1": {
+   "names": [
+    "push:forumtours"
+   ]
+  },
+  "8/2": {
+   "names": [
+    "push:forumtours"
+   ]
+  },
+  "8/3": {
+   "names": [
+    "push:forumtours"
+   ]
+  },
+  "8/4": {
+   "names": [
+    "push:forumtours"
+   ]
+  },
+  "8/5": {
+   "names": [
+    "push:forumtours"
+   ]
+  },
+  "8/6": {
+   "names": [
+    "push:forumtours"
+   ]
+  },
+  "9/1": {
+   "names": [
+    "crafting/craft"
+   ],
+   "method": "mabcaiknchp",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "emifcdomieb"
+    ],
+    "type_ids": [
+     803
+    ]
+   }
+  },
+  "9/3": {
+   "names": [
+    "crafting/mine2"
+   ],
+   "method": "mmidijdldeg",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "emifcdomieb"
+    ],
+    "type_ids": [
+     803
+    ]
+   }
+  },
+  "9/4": {
+   "names": [
+    "aljaoanodmf"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "bkcgemhagon"
+    ],
+    "type_ids": [
+     501
+    ]
+   }
+  },
+  "9/5": {
+   "names": [
+    "crafting/tmplts"
+   ],
+   "method": "cnkcennlnjg",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "hkjgdnepdoh"
+    ],
+    "type_ids": [
+     171
+    ]
+   }
+  },
+  "9/6": {
+   "names": [
+    "crafting/addtmplt"
+   ],
+   "method": "dibjppfgghh",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "hkjgdnepdoh"
+    ],
+    "type_ids": [
+     171
+    ]
+   }
+  },
+  "9/7": {
+   "names": [
+    "crafting/deltmplt"
+   ],
+   "method": "alhiikhnhif",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "11/1": {
+   "names": [
+    "equip/slots"
+   ],
+   "method": "epglajcgpbb",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "bhcpmfooikh"
+    ],
+    "type_ids": [
+     136
+    ]
+   }
+  },
+  "11/2": {
+   "names": [
+    "equip/slots_set"
+   ],
+   "method": "aapgbelmffa",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "bhcpmfooikh"
+    ],
+    "type_ids": [
+     136
+    ]
+   }
+  },
+  "11/3": {
+   "names": [
+    "equip/slots_remove"
+   ],
+   "method": "hgaabbllhch",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "bhcpmfooikh"
+    ],
+    "type_ids": [
+     136
+    ]
+   }
+  },
+  "12/1": {
+   "names": [
+    "feeding/throw"
+   ],
+   "method": "fdgifblhbcl"
+  },
+  "13/1": {
+   "names": [
+    "handitem/set_comp"
+   ],
+   "method": "dcieaifhham",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "13/2": {
+   "names": [
+    "handitem/remove_comp"
+   ],
+   "method": "bnadebamlaj",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "13/3": {
+   "names": [
+    "handitem/remove_all"
+   ],
+   "method": "kdiggacaefb",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "13/4": {
+   "names": [
+    "handitem/prepare"
+   ],
+   "method": "cocaejamjbn",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pomgbkkdeek"
+    ],
+    "type_ids": [
+     158
+    ]
+   }
+  },
+  "13/5": {
+   "names": [
+    "handitem/throw"
+   ],
+   "method": "peakchpimck",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "hfenblpnihn"
+    ],
+    "type_ids": [
+     805
+    ]
+   }
+  },
+  "13/6": {
+   "names": [
+    "handitem/drop"
+   ],
+   "method": "cnmkfjogeia",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "13/7": {
+   "names": [
+    "handitem/set_dist"
+   ],
+   "method": "eemileoigli",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pomgbkkdeek"
+    ],
+    "type_ids": [
+     158
+    ]
+   }
+  },
+  "14/1": {
+   "names": [
+    "fishing/cast_prepare"
+   ],
+   "method": "nlelnbijaff",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "pomgbkkdeek"
+    ],
+    "type_ids": [
+     158
+    ]
+   }
+  },
+  "14/2": {
+   "names": [
+    "fishing/cast"
+   ],
+   "method": "lolpdjpldpo",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "14/3": {
+   "names": [
+    "fishing/fall"
+   ],
+   "method": "fooolnnjbao"
+  },
+  "14/4": {
+   "names": [
+    "fishing/end"
+   ],
+   "method": "lgenplaokio",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "deocnichdpi"
+    ],
+    "type_ids": [
+     801
+    ]
+   }
+  },
+  "14/5": {
+   "names": [
+    "fishing/keep_fish"
+   ],
+   "method": "ehebgacmaom",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "14/6": {
+   "names": [
+    "fishing/release_fish"
+   ],
+   "method": "jlihkmpekoo",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "bnininmemgm"
+    ],
+    "type_ids": [
+     807
+    ]
+   }
+  },
+  "14/7": {
+   "names": [
+    "fishing/step"
+   ],
+   "method": "jdmpkfnaaeo"
+  },
+  "14/8": {
+   "names": [
+    "fishing/load"
+   ],
+   "method": "odpoajipkak"
+  },
+  "14/9": {
+   "names": [
+    "fishing/pull"
+   ],
+   "method": "ekjmbihegpn"
+  },
+  "14/10": {
+   "names": [
+    "fishing/gen"
+   ],
+   "method": "eecdnhjpiek"
+  },
+  "14/11": {
+   "names": [
+    "fishing/hooked"
+   ],
+   "method": "jmeldjdboln"
+  },
+  "14/12": {
+   "names": [
+    "fishing/left"
+   ],
+   "method": "efhpjiloomi"
+  },
+  "14/14": {
+   "names": [
+    "push:fishing"
+   ]
+  },
+  "14/15": {
+   "names": [
+    "push:fishing"
+   ]
+  },
+  "15/1": {
+   "names": [
+    "lure/set_comp"
+   ],
+   "method": "hbckkobipmd",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "15/2": {
+   "names": [
+    "lure/remove_comp"
+   ],
+   "method": "aamdiodmgfn",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "16/1": {
+   "names": [
+    "reel/set_comp"
+   ],
+   "method": "nkllkgkjjif",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "16/2": {
+   "names": [
+    "reel/remove_comp"
+   ],
+   "method": "dljnghibgha",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "17/1": {
+   "names": [
+    "rod/set_rig"
+   ],
+   "method": "mdgbnmjlnih",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "17/2": {
+   "names": [
+    "rod/set_comp"
+   ],
+   "method": "ebbolfflfpa",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "17/3": {
+   "names": [
+    "rod/remove_comp"
+   ],
+   "method": "nieneobeobo",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "17/4": {
+   "names": [
+    "rod/remove_all"
+   ],
+   "method": "clollopepao",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "17/5": {
+   "names": [
+    "rod/set_quivertip"
+   ],
+   "method": "ligapekkdgg",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "17/6": {
+   "names": [
+    "rod/set_baitmount"
+   ],
+   "method": "fonpklinjbl",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "17/7": {
+   "names": [
+    "rod/take"
+   ],
+   "method": "ndnnnhfedcc",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "pomgbkkdeek"
+    ],
+    "type_ids": [
+     158
+    ]
+   }
+  },
+  "17/8": {
+   "names": [
+    "rod/put"
+   ],
+   "method": "nnmnjfndmgl"
+  },
+  "17/9": {
+   "names": [
+    "rod/break"
+   ],
+   "method": "hikfdalijmn",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "afaglefjfpn"
+    ],
+    "type_ids": []
+   }
+  },
+  "17/10": {
+   "names": [
+    "rod/cutline"
+   ],
+   "method": "pimlkbpihof",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "17/11": {
+   "names": [
+    "plcfmnfjkad"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "17/12": {
+   "names": [
+    "rod/set_depth"
+   ],
+   "method": "ilfbbmgbepk"
+  },
+  "17/13": {
+   "names": [
+    "rod/set_clip"
+   ],
+   "method": "ogcjeigfifa"
+  },
+  "17/14": {
+   "names": [
+    "nkdogpdbdnj"
+   ]
+  },
+  "17/15": {
+   "names": [
+    "agpegbobodn"
+   ]
+  },
+  "18/1": {
+   "names": [
+    "gdcbbkhjphh"
+   ]
+  },
+  "18/2": {
+   "names": [
+    "ggihpcopckf"
+   ]
+  },
+  "19/1": {
+   "names": [
+    "mailbox/send_message"
+   ],
+   "method": "dehdjiibdnf",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "19/2": {
+   "names": [
+    "mailbox/send_item"
+   ],
+   "method": "banlidnkckp",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "onobdmohahp"
+    ],
+    "type_ids": [
+     132
+    ]
+   }
+  },
+  "19/3": {
+   "names": [
+    "mailbox/accept_items"
+   ],
+   "method": "pfoibhhfcng",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "19/4": {
+   "names": [
+    "mailbox/accept_all_items"
+   ],
+   "method": "gekddleommn",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "19/5": {
+   "names": [
+    "mailbox/info"
+   ],
+   "method": "pmmgcdcleci",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "nicjmgdnood"
+    ],
+    "type_ids": [
+     133
+    ]
+   }
+  },
+  "19/6": {
+   "names": [
+    "mailbox/list"
+   ],
+   "method": "ajebhfdkcmd",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "Guid"
+    ],
+    "type_ids": []
+   }
+  },
+  "19/7": {
+   "names": [
+    "mailbox/get"
+   ],
+   "method": "ognbkgpmapg",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "MailboxItemMeta"
+    ],
+    "type_ids": []
+   }
+  },
+  "19/8": {
+   "names": [
+    "mailbox/remove"
+   ],
+   "method": "hcjmhfilfga",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "19/9": {
+   "names": [
+    "mailbox/remove_all"
+   ],
+   "method": "fhhhgfdlnia",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "19/10": {
+   "names": [
+    "push:mailbox"
+   ]
+  },
+  "20/1": {
+   "names": [
+    "market/rate"
+   ],
+   "method": "icgpbcdgfne",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "bjhalanbked"
+    ],
+    "type_ids": [
+     302
+    ]
+   }
+  },
+  "20/2": {
+   "names": [
+    "market/sell"
+   ],
+   "method": "adfglcdgjaj",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "hhkmahplcpj"
+    ],
+    "type_ids": [
+     303
+    ]
+   }
+  },
+  "20/3": {
+   "names": [
+    "market/get_offers"
+   ],
+   "method": "cpdcjkfohio",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "apflmkhkbil"
+    ],
+    "type_ids": [
+     301
+    ]
+   }
+  },
+  "20/4": {
+   "names": [
+    "market/sell_offer"
+   ],
+   "method": "ggopjkgknin",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "nkppcppknfe"
+    ],
+    "type_ids": [
+     300
+    ]
+   }
+  },
+  "21/1": {
+   "names": [
+    "workshop/list"
+   ],
+   "method": "dmodfpliedo",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "keialdedcnp"
+    ],
+    "type_ids": [
+     505
+    ]
+   }
+  },
+  "21/2": {
+   "names": [
+    "workshop/diag"
+   ],
+   "method": "cepmjagpndj",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "fcpoceohlbj"
+    ],
+    "type_ids": [
+     503
+    ]
+   }
+  },
+  "21/3": {
+   "names": [
+    "kgcnkjfooad"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "onobdmohahp"
+    ],
+    "type_ids": [
+     132
+    ]
+   }
+  },
+  "21/4": {
+   "names": [
+    "workshop/repair_w_gold",
+    "okccjmnfola"
+   ],
+   "method": "okccjmnfola",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "onobdmohahp"
+    ],
+    "type_ids": [
+     132
+    ]
+   }
+  },
+  "21/5": {
+   "names": [
+    "workshop/redeem"
+   ],
+   "method": "nlhhhobjbnh",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "npioohneipn"
+    ],
+    "type_ids": [
+     506
+    ]
+   }
+  },
+  "22/1": {
+   "names": [
+    "store/list"
+   ],
+   "method": "fjjabmdihhh",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "bkcgemhagon"
+    ],
+    "type_ids": [
+     501
+    ]
+   }
+  },
+  "22/4": {
+   "names": [
+    "store/return"
+   ],
+   "method": "okliaidmmdk",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "22/5": {
+   "names": [
+    "mnlockndaen"
+   ],
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "niojbdbpfld"
+    ],
+    "type_ids": [
+     560
+    ]
+   }
+  },
+  "22/6": {
+   "names": [
+    "ecekphdacgm"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "bool"
+    ],
+    "type_ids": []
+   }
+  },
+  "23/1": {
+   "names": [
+    "storereal/list"
+   ],
+   "method": "dlhiombdacc",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "moljjhgbpjg"
+    ],
+    "type_ids": [
+     550
+    ]
+   }
+  },
+  "23/2": {
+   "names": [
+    "storereal/steam_pay_begin"
+   ],
+   "method": "pmniomcjgbc",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "onobdmohahp"
+    ],
+    "type_ids": [
+     132
+    ]
+   }
+  },
+  "23/3": {
+   "names": [
+    "storereal/steam_pay_finish"
+   ],
+   "method": "mfcbhpgnjce",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "23/4": {
+   "names": [
+    "ahkjfichkhi"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "onobdmohahp"
+    ],
+    "type_ids": [
+     132
+    ]
+   }
+  },
+  "23/5": {
+   "names": [
+    "idpnmfegpnj"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "24/1": {
+   "names": [
+    "social/move"
+   ],
+   "method": "cfkheabclha",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "ancileefnje"
+    ],
+    "type_ids": [
+     402
+    ]
+   }
+  },
+  "24/2": {
+   "names": [
+    "social/auto"
+   ],
+   "method": "gimhpledapb",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "ancileefnje"
+    ],
+    "type_ids": [
+     402
+    ]
+   }
+  },
+  "24/3": {
+   "names": [
+    "social/current"
+   ],
+   "method": "aoplbnekidd",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "ancileefnje"
+    ],
+    "type_ids": [
+     402
+    ]
+   }
+  },
+  "24/4": {
+   "names": [
+    "social/members"
+   ],
+   "method": "iffidhjejgc",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "24/5": {
+   "names": [
+    "social/chatlist"
+   ],
+   "method": "mgeehfogldj",
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "ancileefnje"
+    ],
+    "type_ids": [
+     402
+    ]
+   }
+  },
+  "24/6": {
+   "names": [
+    "social/create"
+   ],
+   "method": "kjnflnijooh",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "ancileefnje"
+    ],
+    "type_ids": [
+     402
+    ]
+   }
+  },
+  "24/7": {
+   "names": [
+    "social/join"
+   ],
+   "method": "bdnkimadnde",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "ancileefnje"
+    ],
+    "type_ids": [
+     402
+    ]
+   }
+  },
+  "24/8": {
+   "names": [
+    "gffmgkaheho"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "24/9": {
+   "names": [
+    "idmplnggaoe"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "24/10": {
+   "names": [
+    "social/public"
+   ],
+   "method": "elbamjdlgfj"
+  },
+  "24/11": {
+   "names": [
+    "social/find"
+   ],
+   "method": "ofamhgnkfjf",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "ifbfdldbana"
+    ],
+    "type_ids": [
+     2002
+    ]
+   }
+  },
+  "24/12": {
+   "names": [
+    "social/bl_get"
+   ],
+   "method": "ilgcaehdopi",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "24/13": {
+   "names": [
+    "social/bl_add"
+   ],
+   "method": "genpiaiejan",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "24/14": {
+   "names": [
+    "social/bl_remove"
+   ],
+   "method": "eainkcedebh",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "24/15": {
+   "names": [
+    "social/abuse_report"
+   ],
+   "method": "hbgibpfclen",
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "24/16": {
+   "names": [
+    "llhgklogeal"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "object"
+    ],
+    "type_ids": []
+   }
+  },
+  "24/19": {
+   "names": [
+    "aldippapbgm"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "byte"
+    ],
+    "type_ids": []
+   }
+  },
+  "24/22": {
+   "names": [
+    "hpfcdbidace"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "hhfaoacdccj"
+    ],
+    "type_ids": []
+   }
+  },
+  "24/27": {
+   "names": [
+    "push:social"
+   ]
+  },
+  "24/28": {
+   "names": [
+    "push:social"
+   ]
+  },
+  "24/29": {
+   "names": [
+    "push:social"
+   ]
+  },
+  "24/30": {
+   "names": [
+    "push:social"
+   ]
+  },
+  "24/31": {
+   "names": [
+    "push:social"
+   ]
+  },
+  "25/1": {
+   "names": [
+    "cofdmbfkifc"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "25/2": {
+   "names": [
+    "kdeehdffopf"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "25/4": {
+   "names": [
+    "cjnikngcmoa"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "25/5": {
+   "names": [
+    "papgofahdbi"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "25/6": {
+   "names": [
+    "nkkdnfdopcf"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "long"
+    ],
+    "type_ids": []
+   }
+  },
+  "27/1": {
+   "names": [
+    "igchdonlnmf"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "27/2": {
+   "names": [
+    "alpciclpmnn"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "27/3": {
+   "names": [
+    "hlmjcnikdpl"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "pcnefbpgdhl"
+    ],
+    "type_ids": [
+     800
+    ]
+   }
+  },
+  "27/4": {
+   "names": [
+    "lkokodffmln"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "llgjfoldbcc"
+    ],
+    "type_ids": [
+     809
+    ]
+   }
+  },
+  "28/1": {
+   "names": [
+    "onakiajohnl"
+   ],
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "epojpghapac"
+    ],
+    "type_ids": [
+     5011
+    ]
+   }
+  },
+  "28/2": {
+   "names": [
+    "bcdgljngnnp"
+   ],
+   "resp": {
+    "kind": "dto+capture",
+    "classes": [
+     "mkooaaknoee"
+    ],
+    "type_ids": [
+     5003
+    ]
+   }
+  },
+  "28/4": {
+   "names": [
+    "paannkpolaj"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "oehmgkkadla"
+    ],
+    "type_ids": [
+     808
+    ]
+   }
+  },
+  "29/1": {
+   "names": [
+    "odjalmiooem"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "cjjndkdbmfo"
+    ],
+    "type_ids": []
+   }
+  },
+  "29/2": {
+   "names": [
+    "emfeehnapcp"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "cjjndkdbmfo"
+    ],
+    "type_ids": []
+   }
+  },
+  "29/3": {
+   "names": [
+    "ngaiioafkmp"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "illcccioffd"
+    ],
+    "type_ids": []
+   }
+  },
+  "29/4": {
+   "names": [
+    "ajjiceiilol"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "illcccioffd"
+    ],
+    "type_ids": []
+   }
+  },
+  "29/5": {
+   "names": [
+    "lehjbiajoff"
+   ],
+   "resp": {
+    "kind": "dto",
+    "classes": [
+     "illcccioffd"
+    ],
+    "type_ids": []
+   }
+  }
+ },
+ "push_args": {
+  "0/1": [],
+  "0/2": [],
+  "14/1": [
+   "guid"
+  ],
+  "14/11": [
+   "guid",
+   "guid",
+   "obj:210",
+   "u32"
+  ],
+  "14/12": [
+   "guid",
+   "guid",
+   "obj:24"
+  ],
+  "14/14": [
+   "guid",
+   "obj:27"
+  ],
+  "14/15": [
+   "guid",
+   "guid"
+  ],
+  "14/2": [
+   "guid",
+   "obj:19",
+   "u32"
+  ],
+  "14/3": [
+   "guid",
+   "obj:19"
+  ],
+  "14/4": [
+   "guid",
+   "obj:211",
+   "u32"
+  ],
+  "14/5": [
+   "guid",
+   "guid"
+  ],
+  "14/6": [
+   "guid",
+   "guid",
+   "*"
+  ],
+  "14/7": [
+   "guid",
+   "obj:20",
+   "u32"
+  ],
+  "14/8": [
+   "guid",
+   "obj:21",
+   "u32"
+  ],
+  "19/10": [
+   "*"
+  ],
+  "2/1": [
+   "*"
+  ],
+  "2/10": [
+   "*"
+  ],
+  "2/11": [
+   "*"
+  ],
+  "2/12": [
+   "*"
+  ],
+  "2/13": [
+   "*"
+  ],
+  "2/14": [
+   "*"
+  ],
+  "2/15": [
+   "*"
+  ],
+  "2/16": [
+   "*"
+  ],
+  "2/2": [
+   "obj:308"
+  ],
+  "2/3": [
+   "obj:324"
+  ],
+  "2/4": [
+   "obj:311"
+  ],
+  "2/5": [
+   "obj:312"
+  ],
+  "2/6": [
+   "obj:311"
+  ],
+  "2/8": [
+   "*"
+  ],
+  "2/9": [
+   "obj:306"
+  ],
+  "24/27": [
+   "obj:401",
+   "str",
+   "u32"
+  ],
+  "24/28": [
+   "*",
+   "*"
+  ],
+  "24/29": [
+   "*",
+   "*"
+  ],
+  "24/30": [
+   "*"
+  ],
+  "24/31": [
+   "*"
+  ],
+  "4/20": [
+   "item..."
+  ],
+  "4/21": [
+   "guidarr"
+  ],
+  "4/22": [
+   "item..."
+  ],
+  "6/15": [
+   "obj:401"
+  ],
+  "6/16": [
+   "obj:1"
+  ],
+  "6/17": [
+   "obj:1",
+   "obj:4"
+  ],
+  "6/18": [
+   "*"
+  ],
+  "6/6": [
+   "*"
+  ],
+  "8/1": [
+   "*"
+  ],
+  "8/2": [
+   "*"
+  ],
+  "8/3": [
+   "*"
+  ],
+  "8/4": [
+   "*"
+  ],
+  "8/5": [
+   "*"
+  ],
+  "8/6": [
+   "*"
+  ]
+ }
+}

@@ -1,0 +1,30 @@
+# 本地配置和证书
+config.yaml
+config.*.yaml
+!config.example.yaml
+*.crt
+*.key
+certs/
+
+# 构建产物
+/bin/
+/dist/
+*.exe
+
+# 本地数据库、日志和测试产物
+/data/
+data_*.sqlite3
+data_*.sqlite3-shm
+data_*.sqlite3-wal
+*.log
+logs/
+testdata/fixtures/
+
+# 可选协议语料
+internal/wiregen/testdata/corpus.jsonl.gz
+
+# 编辑器和操作系统文件
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

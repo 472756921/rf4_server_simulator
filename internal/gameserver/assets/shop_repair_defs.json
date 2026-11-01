@@ -1,0 +1,81 @@
+{
+  "source": "server_data/shop_kind_defs.json (kind=2 repair stores only)",
+  "stores": {
+    "belugaworkshop_006": {
+      "brands": [
+        "beluga"
+      ],
+      "map_key": "level_006_ladoga"
+    },
+    "level_004_workshop": {
+      "brands": [],
+      "map_key": "level_004_torfyanoe_ozero"
+    },
+    "workshop_006": {
+      "brands": [],
+      "map_key": "level_006_ladoga"
+    },
+    "workshop_009": {
+      "brands": [],
+      "map_key": "level_009_ahtuba"
+    },
+    "workshop_01": {
+      "brands": [],
+      "map_key": "level_001_lake"
+    },
+    "workshop_010": {
+      "brands": [],
+      "map_key": "level_010_belaya"
+    },
+    "workshop_011": {
+      "brands": [],
+      "map_key": "level_011_ladoga_02"
+    },
+    "workshop_012": {
+      "brands": [],
+      "map_key": "level_012_north_sea"
+    },
+    "workshop_013": {
+      "brands": [],
+      "map_key": "level_013_sev_don"
+    },
+    "workshop_015": {
+      "brands": [],
+      "map_key": "level_015_tunguska"
+    },
+    "workshop_016": {
+      "brands": [],
+      "map_key": "level_016_yama"
+    },
+    "workshop_02": {
+      "brands": [],
+      "map_key": "level_002_kirzah_river"
+    },
+    "workshop_14": {
+      "brands": [],
+      "map_key": "level_014_carp_lake"
+    },
+    "workshop_19": {
+      "brands": [],
+      "map_key": "level_019_american_pond"
+    },
+    "workshop_sura": {
+      "brands": [],
+      "map_key": "level_008_sura_river"
+    },
+    "workshop_viiveri": {
+      "brands": [],
+      "map_key": "level_003_viiveri_lake"
+    },
+    "workshop_volhov": {
+      "brands": [],
+      "map_key": "level_005_volhov"
+    },
+    "zeiman_workshop_014": {
+      "brands": [
+        "zeiman"
+      ],
+      "map_key": "level_014_carp_lake"
+    }
+  }
+}

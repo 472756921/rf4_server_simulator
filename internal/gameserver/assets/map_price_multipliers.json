@@ -1,0 +1,177 @@
+{
+ "source": "https://www.gamekee.com/rf4/599560.html",
+ "title": "物价维修",
+ "columns": {
+  "repair": "装备维修",
+  "repair_beluga": "Beluga店维修",
+  "repair_zeiman": "Zeiman店维修",
+  "price_industrial": "工业品商店",
+  "price_food": "食品店",
+  "price_fishing": "钓鱼站"
+ },
+ "by_map_key": {
+  "level_001_lake": {
+   "map": "克马羚诺也湖",
+   "repair": 1.0,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": 1.0,
+   "price_food": 0.9,
+   "price_fishing": 1.0
+  },
+  "level_002_kirzah_river": {
+   "map": "惟有诺克河",
+   "repair": 0.85,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": 1.0,
+   "price_food": 0.9,
+   "price_fishing": 1.0
+  },
+  "level_003_viiveri_lake": {
+   "map": "廓里湖",
+   "repair": 2.0,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": 1.5,
+   "price_food": 1.3,
+   "price_fishing": 1.15
+  },
+  "level_004_torfyanoe_ozero": {
+   "map": "旧奥斯特罗格湖",
+   "repair": 0.9,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": 1.0,
+   "price_food": 0.8,
+   "price_fishing": 1.05
+  },
+  "level_005_volhov": {
+   "map": "沃尔霍夫河",
+   "repair": 1.0,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": 1.0,
+   "price_food": 1.0,
+   "price_fishing": 1.0
+  },
+  "level_006_ladoga": {
+   "map": "拉多加湖",
+   "repair": 1.35,
+   "repair_beluga": 0.85,
+   "repair_zeiman": null,
+   "price_industrial": 1.1,
+   "price_food": 1.25,
+   "price_fishing": 1.1
+  },
+  "level_007_grass_lake": {
+   "map": "梅德韦杰湖",
+   "repair": null,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": null,
+   "price_food": 1.3,
+   "price_fishing": null
+  },
+  "level_008_sura_river": {
+   "map": "苏拉河",
+   "repair": 1.1,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": 1.0,
+   "price_food": 1.0,
+   "price_fishing": 1.0
+  },
+  "level_009_ahtuba": {
+   "map": "阿赫图巴河",
+   "repair": 1.0,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": 1.0,
+   "price_food": 1.3,
+   "price_fishing": 1.0
+  },
+  "level_010_belaya": {
+   "map": "白河",
+   "repair": 1.0,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": 1.0,
+   "price_food": 1.0,
+   "price_fishing": 1.1
+  },
+  "level_011_ladoga_02": {
+   "map": "拉多加湖群岛",
+   "repair": 1.28,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": null,
+   "price_food": 1.5,
+   "price_fishing": 1.15
+  },
+  "level_012_north_sea": {
+   "map": "挪威海",
+   "repair": 1.25,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": 1.15,
+   "price_food": 2.0,
+   "price_fishing": 1.0
+  },
+  "level_013_sev_don": {
+   "map": "北顿涅茨河",
+   "repair": 1.0,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": 1.0,
+   "price_food": 1.0,
+   "price_fishing": 1.0
+  },
+  "level_014_carp_lake": {
+   "map": "琥珀湖",
+   "repair": 1.1,
+   "repair_beluga": null,
+   "repair_zeiman": 0.85,
+   "price_industrial": 1.05,
+   "price_food": 1.03,
+   "price_fishing": 1.03
+  },
+  "level_015_tunguska": {
+   "map": "下通古斯卡河",
+   "repair": 1.09,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": 1.0,
+   "price_food": 1.3,
+   "price_fishing": 1.0
+  },
+  "level_016_yama": {
+   "map": "亚马河",
+   "repair": 1.09,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": 1.0,
+   "price_food": 1.3,
+   "price_fishing": 1.0
+  },
+  "level_018_moskitnoe": {
+   "map": "铜湖",
+   "repair": null,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": null,
+   "price_food": null,
+   "price_fishing": 1.04
+  },
+  "level_019_american_pond": {
+   "map": "埃尔克湖",
+   "repair": 1.0,
+   "repair_beluga": null,
+   "repair_zeiman": null,
+   "price_industrial": 1.0,
+   "price_food": 0.9,
+   "price_fishing": 1.0
+  }
+ },
+ "unmapped_maps": {}
+}

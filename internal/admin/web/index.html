@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RF4 Control Deck</title>
+<style>
+:root{--bg:#09111d;--bg2:#0d1725;--panel:#111e2e;--panel2:#162638;--line:#24384f;--text:#e8f0f8;--muted:#8294aa;--accent:#42b8ff;--accent2:#37e2b0;--danger:#ff6178;--warn:#ffbb55;--ok:#54d98c;--shadow:0 18px 40px #0008;--r:16px}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:radial-gradient(circle at 80% 0,#17314b 0,transparent 30%),radial-gradient(circle at 0 100%,#122b2a 0,transparent 28%),var(--bg);color:var(--text);font:14px/1.55 "Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:var(--text)}button{cursor:pointer}input,select,textarea{width:100%;background:#09131f;border:1px solid var(--line);border-radius:10px;padding:10px 12px;outline:none;transition:.18s}input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px #42b8ff1e}textarea{resize:vertical;min-height:110px}
+.btn{border:0;border-radius:10px;padding:10px 15px;background:linear-gradient(135deg,#2aaaf1,#4b7bff);color:#fff;font-weight:650;box-shadow:0 6px 18px #2aaaf12a;transition:.18s}.btn:hover{transform:translateY(-1px);filter:brightness(1.08)}.btn.alt{background:#1b3046;box-shadow:none}.btn.good{background:linear-gradient(135deg,#25b987,#36d6a3)}.btn.bad{background:linear-gradient(135deg,#d8465d,#ff6178)}.btn.sm{padding:6px 10px;font-size:12px}.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.shell{display:grid;grid-template-columns:232px 1fr;min-height:100vh}.sidebar{position:sticky;top:0;height:100vh;padding:22px 16px;background:#08111cdf;border-right:1px solid var(--line);backdrop-filter:blur(16px);display:flex;flex-direction:column;gap:22px}.brand{display:flex;gap:12px;align-items:center;padding:4px 8px}.logo{width:42px;height:42px;border-radius:14px;background:linear-gradient(145deg,#35d7b0,#2f8cff);display:grid;place-items:center;font-weight:900;color:#06121d;box-shadow:0 8px 22px #35d7b044}.brand b{display:block;font-size:17px;letter-spacing:.04em}.brand span{color:var(--muted);font-size:11px;letter-spacing:.12em;text-transform:uppercase}.nav{display:flex;flex-direction:column;gap:5px}.nav button{display:flex;align-items:center;gap:11px;border:1px solid transparent;background:transparent;color:var(--muted);padding:11px 12px;border-radius:11px;text-align:left}.nav button:hover{background:#122238;color:var(--text)}.nav button.on{background:linear-gradient(90deg,#173650,#112238);color:#fff;border-color:#28506f}.nav .ico{width:22px;text-align:center;color:var(--accent)}.side-foot{margin-top:auto;padding:12px;background:#0b1623;border:1px solid var(--line);border-radius:14px}.side-foot .u{font-weight:700}.side-foot .m{font-size:11px;color:var(--muted);margin-bottom:10px}
+.main{min-width:0;padding:24px 28px 42px}.topbar{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:22px}.topbar h1{font-size:23px;margin:0 0 3px}.topbar p{margin:0;color:var(--muted);font-size:12px}.top-actions{display:flex;align-items:center;gap:10px}.status-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px var(--ok)}
+.view{display:none;animation:fade .2s ease}@keyframes fade{from{opacity:.3;transform:translateY(4px)}to{opacity:1;transform:none}}.view.on{display:block}
+.grid{display:grid;gap:16px}.stats{grid-template-columns:repeat(4,minmax(0,1fr))}.card{background:linear-gradient(160deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:18px}.stat .k{color:var(--muted);font-size:12px}.stat .v{font-size:30px;font-weight:800;margin:6px 0}.stat .s{font-size:11px;color:var(--accent2)}.section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.section-head h2{font-size:16px;margin:0}.section-head small{color:var(--muted)}.toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.toolbar .grow{flex:1;min-width:190px}.split{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;align-items:start}.player-list{max-height:calc(100vh - 170px);overflow:auto}.player-row{display:flex;justify-content:space-between;gap:10px;padding:11px;border-radius:11px;border:1px solid transparent;cursor:pointer}.player-row:hover,.player-row.on{background:#14273b;border-color:#2a4963}.player-row .n{font-weight:700}.player-row .id{font-size:11px;color:var(--muted)}.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 8px;background:#1c3148;color:#bcd1e4;font-size:11px}.pill.ok{background:#123a2e;color:#6ff0b7}.pill.bad{background:#441d28;color:#ff91a1}.empty{padding:42px 16px;text-align:center;color:var(--muted)}
+.player-hero{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:16px}.player-hero h2{margin:0;font-size:21px}.player-hero .sub{color:var(--muted);font-size:12px}.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin:12px 0 16px;overflow:auto}.tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:9px 12px}.tabs button.on{color:#fff;border-color:var(--accent)}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.field label{display:block;color:var(--muted);font-size:11px;margin:0 0 5px}.field.span2{grid-column:span 2}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px}table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{padding:10px 11px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}th{position:sticky;top:0;background:#101e2d;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;z-index:1}tr:last-child td{border-bottom:0}tbody tr:hover{background:#15263a}.mono{font-family:Consolas,monospace}.mini-input{padding:6px 8px;border-radius:7px;min-width:72px}.tag{font-size:10px;padding:2px 6px;border-radius:5px;background:#25405b}.tag.gold{background:#493c1d;color:#ffd479}.tag.blue{background:#183e60;color:#84d5ff}.muted{color:var(--muted)}.right{text-align:right}.danger-text{color:#ff8797}
+.skills{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.skill{border:1px solid var(--line);border-radius:12px;padding:12px;background:#0e1b29}.skill .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.bar{height:7px;background:#08111b;border-radius:8px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,#32c9a3,#43a9ff)}.skill .edit{display:flex;gap:8px;margin-top:10px;align-items:center}.skill input{min-width:0;padding:7px 9px}.fish-table td{white-space:normal}.switch{appearance:none;width:38px;height:21px;border-radius:20px;background:#26394d;position:relative;cursor:pointer;border:1px solid #38506a;padding:0}.switch:after{content:"";position:absolute;width:15px;height:15px;border-radius:50%;background:#91a6ba;top:2px;left:2px;transition:.18s}.switch:checked{background:#1b725a}.switch:checked:after{left:19px;background:#b9ffe9}
+.modal-bg{position:fixed;inset:0;background:#02070dcc;backdrop-filter:blur(5px);display:none;align-items:center;justify-content:center;padding:20px;z-index:50}.modal-bg.on{display:flex}.modal{background:#101d2b;border:1px solid #2a465f;border-radius:18px;box-shadow:0 28px 90px #000c;width:min(760px,96vw);max-height:90vh;overflow:auto;padding:20px}.modal h3{margin:0 0 4px}.modal .sub{color:var(--muted);font-size:12px;margin-bottom:16px}.results{margin-top:9px;max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:10px}.result{padding:9px 11px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;cursor:pointer}.result:hover{background:#172b40}.result:last-child{border:0}.attach-row{display:grid;grid-template-columns:1fr 90px 38px;gap:8px;margin-bottom:8px}.mail-box{display:grid;grid-template-columns:1fr 340px;gap:16px}.log{max-height:250px;overflow:auto;font:12px/1.6 Consolas,monospace;background:#08121d;border-radius:10px;padding:12px;color:#a9bed3}
+.toast{position:fixed;right:22px;bottom:22px;display:flex;flex-direction:column;gap:8px;z-index:80}.toast div{padding:11px 14px;border-radius:11px;background:#17364b;border:1px solid #2d6680;box-shadow:var(--shadow);animation:in .2s ease}@keyframes in{from{opacity:0;transform:translateX(15px)}to{opacity:1;transform:none}}.toast .bad{background:#481f2a;border-color:#7a3443}.toast .ok{background:#143b31;border-color:#286a58}
+#login{min-height:100vh;display:grid;place-items:center;padding:20px}.login-card{width:min(390px,95vw);padding:28px;background:linear-gradient(160deg,#132539,#0b1521);border:1px solid #2a455f;border-radius:22px;box-shadow:0 30px 90px #000b}.login-card .logo{width:58px;height:58px;margin-bottom:18px}.login-card h1{font-size:23px;margin:0 0 4px}.login-card p{color:var(--muted);margin:0 0 20px}.login-card .field{margin-bottom:12px}
+@media(max-width:1100px){.split{grid-template-columns:1fr}.player-list{max-height:300px}.stats{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:repeat(2,1fr)}.mail-box{grid-template-columns:1fr}}@media(max-width:720px){.shell{grid-template-columns:1fr}.sidebar{height:auto;position:relative;padding:13px}.nav{flex-direction:row;overflow:auto}.nav button{white-space:nowrap}.main{padding:16px}.topbar{align-items:flex-start}.stats,.form-grid,.skills{grid-template-columns:1fr}.modal-bg{padding:8px}}
+</style>
+</head>
+<body>
+<div id="login">
+  <form class="login-card" onsubmit="doLogin(event)">
+    <div class="logo">RF</div><h1>RF4 Control Deck</h1><p>玩家、库存、商店、鱼口与邮件统一控制台</p>
+    <div class="field"><label>管理员账号</label><input id="lu" autocomplete="username" required></div>
+    <div class="field"><label>密码</label><input id="lp" type="password" autocomplete="current-password" required></div>
+    <button class="btn" style="width:100%;margin-top:6px">进入控制台</button>
+  </form>
+</div>
+<div class="shell" id="app" style="display:none">
+  <aside class="sidebar">
+    <div class="brand"><div class="logo">RF</div><div><b>Control Deck</b><span>RF4 Admin</span></div></div>
+    <nav class="nav" id="nav">
+      <button class="on" data-view="dashboard" onclick="go('dashboard')"><span class="ico">⌂</span>总览</button>
+      <button data-view="players" onclick="go('players')"><span class="ico">♟</span>玩家工作台</button>
+      <button data-view="stores" onclick="go('stores')"><span class="ico">▤</span>商店库存</button>
+      <button data-view="fish" onclick="go('fish')"><span class="ico">≈</span>鱼口控制</button>
+      <button data-view="mail" onclick="go('mail')"><span class="ico">✉</span>邮件中心</button>
+      <button data-view="audit" onclick="go('audit')"><span class="ico">≡</span>审计日志</button>
+    </nav>
+    <div class="side-foot"><div class="u" id="who">admin</div><div class="m"><span class="status-dot"></span> 服务在线</div><button class="btn alt sm" onclick="logout()">退出登录</button></div>
+  </aside>
+  <main class="main">
+    <header class="topbar"><div><h1 id="pageTitle">总览</h1><p id="pageSub">服务器运行状态与快捷操作</p></div><div class="top-actions"><button class="btn alt" onclick="refreshCurrent()">刷新</button></div></header>
+    <section class="view on" id="view-dashboard"><div class="grid stats" id="stats"></div><div class="card" style="margin-top:16px"><div class="section-head"><h2>快捷入口</h2><small>常用管理动作</small></div><div class="actions"><button class="btn" onclick="go('players')">管理玩家</button><button class="btn alt" onclick="go('stores')">修改库存</button><button class="btn alt" onclick="go('fish')">调整鱼口</button><button class="btn alt" onclick="go('mail')">发送邮件</button></div></div></section>
+    <section class="view" id="view-players"><div class="split"><div class="card player-list"><div class="toolbar"><input class="grow" id="playerSearch" placeholder="搜索 UID / 昵称" onkeydown="if(event.key==='Enter')loadPlayers()"><button class="btn sm" onclick="loadPlayers()">搜索</button></div><div id="playerList" style="margin-top:12px"></div></div><div class="card" id="playerDetail"><div class="empty">选择左侧玩家开始管理</div></div></div></section>
+    <section class="view" id="view-stores"><div class="card"><div class="toolbar"><select id="storeSelect" class="grow" onchange="loadStoreItems()"></select><input id="storeSearch" placeholder="搜索商品 / 名称" onkeydown="if(event.key==='Enter')loadStoreItems()"><button class="btn" onclick="loadStoreItems()">查询</button></div><div id="storeSummary" class="muted" style="margin:12px 0"></div><div class="table-wrap" id="storeTable"></div></div></section>
+    <section class="view" id="view-fish"><div class="grid" style="grid-template-columns:270px minmax(0,1fr)"><div class="card"><div class="section-head"><h2>水域</h2></div><input id="fishSearch" placeholder="筛选水域" oninput="renderFishAreas()"><div id="fishAreas" style="margin-top:10px;max-height:70vh;overflow:auto"></div></div><div class="card" id="fishEditor"><div class="empty">选择水域配置鱼口</div></div></div></section>
+    <section class="view" id="view-mail"><div class="mail-box"><div class="card"><div class="section-head"><h2>撰写邮件</h2><small>队列约 2 秒内由主服投递</small></div><div class="form-grid" style="grid-template-columns:1fr 1fr"><div class="field"><label>收件人 UID</label><input id="mailUid" type="number"></div><div class="field"><label>快捷载入玩家</label><input id="mailPlayerSearch" placeholder="搜索并回车" onkeydown="if(event.key==='Enter')findMailPlayer()"></div></div><div class="field" style="margin-top:12px"><label>邮件正文</label><textarea id="mailText" placeholder="写给玩家的消息…"></textarea></div><div class="section-head" style="margin-top:14px"><h2>附件</h2><button class="btn alt sm" onclick="addAttachment()">+ 添加附件</button></div><div id="attachments"></div><div class="actions"><button class="btn good" onclick="sendMail()">发送邮件</button><button class="btn alt" onclick="previewMail()">预览</button></div></div><div class="card"><div class="section-head"><h2>发送预览</h2></div><div id="mailPreview" class="empty">填写邮件后点击预览</div><div class="section-head" style="margin-top:20px"><h2>常用模板</h2></div><div class="actions"><button class="btn alt sm" onclick="mailTemplate('补偿')">补偿邮件</button><button class="btn alt sm" onclick="mailTemplate('活动奖励')">活动奖励</button><button class="btn alt sm" onclick="mailTemplate('测试')">测试邮件</button></div></div></div></section>
+    <section class="view" id="view-audit"><div class="card"><div class="section-head"><h2>最近操作</h2><small>最新 200 条</small></div><div class="table-wrap" id="auditTable"></div></div></section>
+  </main>
+</div>
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+<script>
+let TOKEN=localStorage.getItem('rf4_admin_token')||'';
+let VIEW='dashboard',PLAYER=null,PLAYER_TAB='profile',FISH_AREA='',FISH_CFG=null,STORE_ITEMS=[];
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>Number(n||0).toLocaleString('zh-CN');
+const timeText=ts=>ts?new Date(Number(ts)*1000).toLocaleString('zh-CN'):'-';
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function api(path,opt={}){
+  const r=await fetch(path,{...opt,headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN,...(opt.headers||{})}});
+  const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{data={raw:text}}
+  if(!r.ok){if(r.status===401){logout()}throw new Error(data.error||('HTTP '+r.status))}return data;
+}
+function toast(msg,type='ok'){
+  const d=document.createElement('div');d.className=type;d.textContent=msg;$('#toast').appendChild(d);
+  setTimeout(()=>{d.style.opacity='0';d.style.transform='translateX(20px)';setTimeout(()=>d.remove(),220)},2600);
+}
+function showModal(title,sub,body){
+  $('#modal').innerHTML=`<div class="section-head"><div><h3>${esc(title)}</h3><div class="sub">${esc(sub||'')}</div></div><button class="btn alt sm" onclick="closeModal()">关闭</button></div>${body}`;
+  $('#modalBg').classList.add('on');
+}
+function closeModal(){$('#modalBg').classList.remove('on');$('#modal').innerHTML=''}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+async function doLogin(e){
+  e.preventDefault();
+  try{
+    const d=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('#lu').value,password:$('#lp').value})});
+    TOKEN=d.token;localStorage.setItem('rf4_admin_token',TOKEN);await boot();
+  }catch(e){toast(e.message,'bad')}
+}
+function logout(){TOKEN='';localStorage.removeItem('rf4_admin_token');$('#app').style.display='none';$('#login').style.display='grid'}
+async function boot(){
+  try{
+    const me=await api('/api/me');$('#who').textContent=me.username;$('#login').style.display='none';$('#app').style.display='grid';
+    const initial=location.hash.slice(1);go(titles[initial]?initial:'dashboard',true);setInterval(()=>{if(VIEW==='dashboard'&&TOKEN)loadDashboard().catch(()=>{})},8000);
+  }catch(e){logout()}
+}
+const titles={dashboard:['总览','服务器运行状态与快捷操作'],players:['玩家工作台','档案、背包、护网、技能一站式管理'],stores:['商店库存','覆盖静态货架价格与库存'],fish:['鱼口控制','水域鱼种权重、上鱼概率与发鱼延迟'],mail:['邮件中心','发送文本与多附件邮件'],audit:['审计日志','追踪后台管理操作']};
+function go(name,fromHash=false){
+  if(!titles[name])name='dashboard';
+  VIEW=name;document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.view===name));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='view-'+name));
+  $('#pageTitle').textContent=titles[name][0];$('#pageSub').textContent=titles[name][1];
+  if(!fromHash&&location.hash!=='#'+name)history.replaceState(null,'','#'+name);
+  refreshCurrent();
+}
+window.addEventListener('hashchange',()=>go(location.hash.slice(1),true));
+function refreshCurrent(){
+  const jobs={dashboard:loadDashboard,players:()=>loadPlayers(false),stores:loadStores,fish:loadFishAreas,mail:()=>{},audit:loadAudit};
+  (jobs[VIEW]||(()=>{}))().catch(e=>toast(e.message,'bad'));
+}
+async function loadDashboard(){
+  const d=await api('/api/dashboard');
+  const stats=[['在线会话',d.sessions,'主服实时'],['玩家档案',d.players,'已创建'],['物品实例',d.items,'背包+装备'],['邮件',d.mails,'全部记录'],['运行参数',d.tunables,'热更新'],['审计事件',d.audits,'累计']];
+  $('#stats').innerHTML=stats.map(([k,v,s])=>`<div class="card stat"><div class="k">${k}</div><div class="v">${fmt(v)}</div><div class="s">${s}</div></div>`).join('');
+}
+async function loadAudit(){
+  const list=await api('/api/audit?limit=200');
+  $('#auditTable').innerHTML=`<table><thead><tr><th>时间</th><th>管理员</th><th>动作</th><th>对象</th><th>详情</th></tr></thead><tbody>${list.map(e=>`<tr><td>${timeText(e.TS??e.ts)}</td><td>${esc(e.Admin??e.admin)}</td><td><span class="tag blue">${esc(e.Action??e.action)}</span></td><td class="mono">${esc(e.Target??e.target)}</td><td style="white-space:normal;max-width:430px">${esc(e.Detail??e.detail)}</td></tr>`).join('')||'<tr><td colspan="5" class="empty">暂无记录</td></tr>'}</tbody></table>`;
+}
+let playerCache=[],ITEM_FILTER='';
+async function loadPlayers(keep=false){
+  const q=$('#playerSearch')?.value?.trim()||'';
+  playerCache=await api('/api/players?q='+encodeURIComponent(q));
+  $('#playerList').innerHTML=playerCache.map(p=>`<div class="player-row ${PLAYER?.uid===p.uid?'on':''}" data-uid="${p.uid}" onclick="selectPlayer(${p.uid})"><div><div class="n">${esc(p.name)}</div><div class="id">UID ${p.uid} · Lv.${p.level}</div></div><div>${p.banned?'<span class="pill bad">封禁</span>':'<span class="pill ok">正常</span>'}</div></div>`).join('')||'<div class="empty">没有匹配玩家</div>';
+  if(!keep && playerCache.length && !PLAYER)selectPlayer(playerCache[0].uid);
+}
+async function selectPlayer(uid){
+  try{PLAYER=await api('/api/players/detail?uid='+uid);PLAYER_TAB='profile';ITEM_FILTER='';renderPlayerDetail();await loadPlayers(true)}catch(e){toast(e.message,'bad')}
+}
+function renderPlayerDetail(){
+  if(!PLAYER)return;
+  const p=PLAYER;
+  $('#playerDetail').innerHTML=`
+    <div class="player-hero"><div><h2>${esc(p.name)} <span class="muted">#${p.uid}</span></h2><div class="sub">Lv.${p.level} · XP ${fmt(p.xp)} · 背包/装备 ${p.item_count} · 护网 ${p.keepnet_count} · 邮件 ${p.mail_count}</div></div><div class="actions"><button class="btn alt sm" onclick="kickPlayer()">踢下线</button><button class="${p.banned?'btn good':'btn bad'} sm" onclick="toggleBan()">${p.banned?'解除封禁':'封禁玩家'}</button></div></div>
+    <div class="tabs"><button class="${PLAYER_TAB==='profile'?'on':''}" onclick="setPlayerTab('profile')">档案与资产</button><button class="${PLAYER_TAB==='items'?'on':''}" onclick="setPlayerTab('items')">背包 / 装备</button><button class="${PLAYER_TAB==='keepnet'?'on':''}" onclick="setPlayerTab('keepnet')">护网</button><button class="${PLAYER_TAB==='skills'?'on':''}" onclick="setPlayerTab('skills')">技能熟练度</button><button class="${PLAYER_TAB==='mail'?'on':''}" onclick="setPlayerTab('mail')">邮箱</button></div>
+    <div id="playerTabBody"></div>`;
+  renderPlayerTab();
+}
+function setPlayerTab(tab){PLAYER_TAB=tab;renderPlayerDetail()}
+function renderPlayerTab(){
+  const p=PLAYER;
+  if(!p)return;
+  if(PLAYER_TAB==='profile'){
+    $('#playerTabBody').innerHTML=`<div class="form-grid">
+      <div class="field span2"><label>昵称</label><input id="pf_name" value="${esc(p.name)}"></div>
+      <div class="field"><label>等级</label><input id="pf_level" type="number" min="1" max="58" value="${p.level}"></div>
+      <div class="field"><label>累计经验</label><input id="pf_xp" type="number" min="0" value="${p.xp}"></div>
+      <div class="field"><label>银币（分）</label><input id="pf_silver" type="number" value="${p.silver}"></div>
+      <div class="field"><label>金币（分）</label><input id="pf_gold" type="number" value="${p.gold}"></div>
+      <div class="field"><label>银行（分）</label><input id="pf_bank" type="number" value="${p.bank}"></div>
+      <div class="field"><label>会员</label><input value="${p.membership}" disabled></div>
+    </div><div class="actions"><button class="btn good" onclick="saveProfile()">保存档案与货币</button><button class="btn alt" onclick="selectPlayer(${p.uid})">撤销修改</button></div>`;
+  }
+  if(PLAYER_TAB==='items')renderItems();
+  if(PLAYER_TAB==='keepnet')renderKeepnet();
+  if(PLAYER_TAB==='skills')renderSkills();
+  if(PLAYER_TAB==='mail')renderPlayerMail();
+}
+async function saveProfile(){
+  const body={uid:PLAYER.uid,name:$('#pf_name').value,level:+$('#pf_level').value,xp:+$('#pf_xp').value,silver:+$('#pf_silver').value,gold:+$('#pf_gold').value,bank:+$('#pf_bank').value};
+  await api('/api/players/update',{method:'POST',body:JSON.stringify(body)});toast('档案已保存，在线玩家将收到 2/1 刷新');await sleep(400);await selectPlayer(PLAYER.uid);
+}
+function renderItems(){
+  $('#playerTabBody').innerHTML=`<div class="toolbar"><input class="grow" id="itemFilter" placeholder="筛选 item_id / 名称 / GUID" value="${esc(ITEM_FILTER)}" oninput="ITEM_FILTER=this.value;renderItemRows()"><button class="btn" onclick="showGrantItem()">+ 发放物品</button></div><div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>物品</th><th>类型</th><th>容器</th><th>数量</th><th>耐久</th><th>GUID</th><th></th></tr></thead><tbody id="itemRows"></tbody></table></div>`;
+  renderItemRows();
+}
+function renderItemRows(){
+  const q=ITEM_FILTER.toLowerCase();const rows=(PLAYER.items||[]).filter(x=>!q||`${x.item_id} ${x.name} ${x.guid}`.toLowerCase().includes(q));
+  $('#itemRows').innerHTML=rows.map(x=>`<tr><td><b>${esc(x.name||x.item_id)}</b><div class="muted mono">${esc(x.item_id)}</div></td><td>${x.category}</td><td>${esc(x.container)}</td><td>${x.qty}</td><td>${Number(x.durability).toFixed(4)}</td><td class="mono muted">${esc(x.guid.slice(0,12))}…</td><td class="right"><button class="btn bad sm" data-guid="${esc(x.guid)}" onclick="deletePlayerItem(this.dataset.guid)">删除</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">没有物品</td></tr>';
+}
+async function deletePlayerItem(guid){
+  if(!confirm('确定删除这件物品？操作会写入审计日志。'))return;
+  await api('/api/players/items/delete',{method:'POST',body:JSON.stringify({uid:PLAYER.uid,guids:[guid]})});toast('删除指令已发送');await sleep(2300);await selectPlayer(PLAYER.uid);setPlayerTab('items');
+}
+async function showGrantItem(){
+  showModal('发放物品','搜索物品目录，选择后输入数量',`<input id="grantSearch" placeholder="物品 ID 或中文名" oninput="debounce('grantSearch',searchGrantItems)"><div class="results" id="grantResults"></div><div class="form-grid" style="grid-template-columns:1fr 110px;margin-top:12px"><div class="field"><label>已选物品</label><input id="grantItemId" placeholder="item_id"></div><div class="field"><label>数量</label><input id="grantQty" type="number" min="1" value="1"></div></div><div class="actions"><button class="btn good" onclick="grantItem()">确认发放</button></div>`);searchGrantItems();
+}
+async function searchGrantItems(){const q=$('#grantSearch').value.trim();const list=await api('/api/catalog/items?q='+encodeURIComponent(q));$('#grantResults').innerHTML=list.map(x=>`<div class="result" data-id="${esc(x.item_id)}" onclick="$('#grantItemId').value=this.dataset.id"><div><b>${esc(x.name||x.item_id)}</b><div class="muted mono">${esc(x.item_id)} · ${x.numeric_id}</div></div><span class="tag">cat ${x.category}</span></div>`).join('')||'<div class="empty">无结果</div>'}
+async function grantItem(){const item_id=$('#grantItemId').value.trim(),qty=+$('#grantQty').value||1;if(!item_id)return toast('请选择物品','bad');await api('/api/players/grant',{method:'POST',body:JSON.stringify({uid:PLAYER.uid,item_id,qty})});closeModal();toast('发放指令已发送');await sleep(2300);await selectPlayer(PLAYER.uid);setPlayerTab('items')}
+function renderKeepnet(){
+  const rows=PLAYER.keepnet||[];
+  $('#playerTabBody').innerHTML=`<div class="toolbar"><div class="grow muted">共 ${rows.length} 条鱼，删除后统计/鱼市会同步更新</div><button class="btn" onclick="showAddKeepnet()">+ 添加鱼</button></div><div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>鱼种</th><th>重量</th><th>档位</th><th>地点</th><th>饵</th><th>时间</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${esc(x.name_zh||x.species)}</b><div class="muted mono">${esc(x.species)}</div></td><td>${fmt(x.weight_g)} g</td><td><span class="tag">G${x.cat}</span></td><td>${esc(x.keep_level||x.keep_loc)}</td><td>${esc(x.keep_bait)}</td><td>${timeText(x.ts)}</td><td class="right"><button class="btn bad sm" data-guid="${esc(x.echo_guid)}" onclick="deleteKeepnet(this.dataset.guid)">删除</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">护网为空</td></tr>'}</tbody></table></div>`;
+}
+async function deleteKeepnet(guid){if(!confirm('从护网删除这条鱼？'))return;await api('/api/players/keepnet/delete',{method:'POST',body:JSON.stringify({uid:PLAYER.uid,guids:[guid]})});toast('删除指令已发送');await sleep(2300);await selectPlayer(PLAYER.uid);setPlayerTab('keepnet')}
+function showAddKeepnet(){showModal('添加护网鱼','可直接输入鱼种 key，或搜索鱼库填充',`<div class="form-grid"><div class="field span2"><label>鱼种 key</label><div class="toolbar"><input class="grow" id="knSpecies" placeholder="例如 c.roach"><button class="btn alt sm" onclick="searchFishForKeepnet()">搜索</button></div></div><div class="field"><label>重量（g）</label><input id="knWeight" type="number" min="1" value="500"></div><div class="field"><label>档位</label><select id="knCat"><option value="1">1 普通</option><option value="2">2 达标</option><option value="3">3 奖杯</option><option value="4">4 蓝冠</option></select></div><div class="field span2"><label>地点 level key</label><input id="knLevel" placeholder="level_001_lake"></div><div class="field"><label>场景 loc</label><input id="knLoc" placeholder="loc1_02"></div><div class="field"><label>钓点</label><input id="knSpot" type="number" value="0"></div><div class="field span2"><label>饵 item_id</label><input id="knBait" placeholder="worm_01"></div></div><div class="results" id="knFishResults"></div><div class="actions"><button class="btn good" onclick="addKeepnet()">加入护网</button></div>`)}
+async function searchFishForKeepnet(){const q=$('#knSpecies').value.trim();const list=await api('/api/fish/pool?q='+encodeURIComponent(q)+'&limit=40');$('#knFishResults').innerHTML=list.map(x=>`<div class="result" data-key="${esc(x.fish_key)}" onclick="$('#knSpecies').value=this.dataset.key"><div><b>${esc(x.name_zh)}</b><div class="muted mono">${esc(x.fish_key)}</div></div><span class="tag">${fmt(x.min_g)}-${fmt(x.max_g)}g</span></div>`).join('')||'<div class="empty">无结果</div>'}
+async function addKeepnet(){const body={uid:PLAYER.uid,species:$('#knSpecies').value.trim(),weight_g:+$('#knWeight').value,cat:+$('#knCat').value,keep_level:$('#knLevel').value.trim(),keep_loc:$('#knLoc').value.trim(),keep_spot:+$('#knSpot').value||0,keep_bait:$('#knBait').value.trim()};if(!body.species||body.weight_g<=0)return toast('请填写鱼种和重量','bad');await api('/api/players/keepnet/add',{method:'POST',body:JSON.stringify(body)});closeModal();toast('添加指令已发送');await sleep(2300);await selectPlayer(PLAYER.uid);setPlayerTab('keepnet')}
+function renderSkills(){
+  const skills=PLAYER.skills||[];$('#playerTabBody').innerHTML=`<div class="skills">${skills.map(s=>`<div class="skill"><div class="top"><div><b>${esc(s.name)}</b><div class="muted">大类 ${s.skill_id} · ${s.node_count} 个节点</div></div><span class="pill">${Number(s.points).toFixed(2)}%</span></div><div class="bar"><i style="width:${Math.min(100,Number(s.points)/110*100)}%"></i></div><div class="edit"><input type="number" min="0" max="110" step="0.1" value="${s.points}" id="sk_${s.skill_id}"><button class="btn sm" onclick="saveSkill(${s.skill_id})">保存</button></div></div>`).join('')}</div><div class="actions"><button class="btn alt" onclick="resetSkills()">全部设为 0%</button></div>`;
+}
+async function saveSkill(id){const points=+$('#sk_'+id).value;await api('/api/players/skills/update',{method:'POST',body:JSON.stringify({uid:PLAYER.uid,skill_id:id,points})});toast('熟练度已更新');await sleep(500);await selectPlayer(PLAYER.uid);setPlayerTab('skills')}
+async function resetSkills(){if(!confirm('把所有技能大类熟练度设为 0%？'))return;for(const s of PLAYER.skills||[])await api('/api/players/skills/update',{method:'POST',body:JSON.stringify({uid:PLAYER.uid,skill_id:s.skill_id,points:0})});toast('全部熟练度已清零');await selectPlayer(PLAYER.uid);setPlayerTab('skills')}
+function renderPlayerMail(){const rows=PLAYER.mails||[];$('#playerTabBody').innerHTML=`<div class="table-wrap"><table><thead><tr><th>ID</th><th>正文</th><th>类型</th><th>状态</th><th>时间</th></tr></thead><tbody>${rows.map(m=>`<tr><td>${m.id}</td><td style="white-space:normal">${esc(m.text||'(附件邮件)')}</td><td>${m.kind?'附件':'文本'}</td><td>${m.read?'<span class="pill">已读</span>':'<span class="pill ok">未读</span>'}</td><td>${timeText(m.created_ts)}</td></tr>`).join('')||'<tr><td colspan="5" class="empty">邮箱为空</td></tr>'}</tbody></table></div><div class="actions"><button class="btn" onclick="prefillMail(${PLAYER.uid})">给该玩家发邮件</button></div>`}
+async function kickPlayer(){if(!confirm('踢下线？'))return;await api('/api/players/kick',{method:'POST',body:JSON.stringify({uid:PLAYER.uid})});toast('已发送踢下线指令')}
+async function toggleBan(){const banned=!PLAYER.banned;if(!confirm(banned?'封禁该玩家？':'解除封禁？'))return;await api('/api/players/ban',{method:'POST',body:JSON.stringify({uid:PLAYER.uid,banned})});toast(banned?'已封禁':'已解封');await selectPlayer(PLAYER.uid)}
+const debounceTimers={};
+function debounce(key,fn,ms=240){clearTimeout(debounceTimers[key]);debounceTimers[key]=setTimeout(fn,ms)}
+async function loadStores(){
+  const stores=await api('/api/stores');
+  const sel=$('#storeSelect');const old=sel.value;
+  sel.innerHTML=stores.map(s=>`<option value="${esc(s.store_id)}">${esc(s.store_id)} · ${s.item_count} 件 · 覆盖 ${s.override_count}</option>`).join('');
+  if(old&&stores.some(s=>s.store_id===old))sel.value=old;
+  if(sel.value)await loadStoreItems();
+}
+async function loadStoreItems(){
+  const id=$('#storeSelect').value;if(!id)return;
+  const q=$('#storeSearch').value.trim();STORE_ITEMS=await api('/api/stores/items?store_id='+encodeURIComponent(id)+'&q='+encodeURIComponent(q)+'&limit=1000');
+  const over=STORE_ITEMS.filter(x=>x.has_override).length,stock=STORE_ITEMS.reduce((n,x)=>n+Number(x.stock||0),0);
+  $('#storeSummary').textContent=`${id} · 当前返回 ${STORE_ITEMS.length} 件 · 总库存 ${fmt(stock)} · 已覆盖 ${over} 件`;
+  renderStoreTable();
+}
+function renderStoreTable(){
+  $('#storeTable').innerHTML=`<table><thead><tr><th>商品</th><th>类别</th><th>原价 / 原库存</th><th>有效银价</th><th>有效金币</th><th>有效库存</th><th></th></tr></thead><tbody>${STORE_ITEMS.map((x,i)=>`<tr><td><b>${esc(x.name||x.item_id)}</b><div class="muted mono">${esc(x.item_id)}</div></td><td>${x.category}</td><td class="muted">${fmt(x.base_silver)} / ${fmt(x.base_gold)} / ${fmt(x.base_stock)}</td><td><input class="mini-input" id="ss_${i}" type="number" min="0" value="${x.silver}"></td><td><input class="mini-input" id="sg_${i}" type="number" min="0" value="${x.gold}"></td><td><input class="mini-input" id="st_${i}" type="number" min="0" value="${x.stock}"></td><td class="right"><button class="btn sm ${x.has_override?'good':''}" onclick="saveStoreRow(${i})">${x.has_override?'更新覆盖':'保存'}</button>${x.has_override?` <button class="btn alt sm" onclick="resetStoreRow(${i})">恢复静态</button>`:''}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">该商店没有货架商品</td></tr>'}</tbody></table>`;
+}
+async function saveStoreRow(i){
+  const x=STORE_ITEMS[i];const body={store_id:x.store_id,item_id:x.item_id,silver:+$('#ss_'+i).value,gold:+$('#sg_'+i).value,stock:+$('#st_'+i).value};
+  await api('/api/stores/items/update',{method:'POST',body:JSON.stringify(body)});toast('货架覆盖已保存：'+x.item_id);await loadStoreItems();
+}
+async function resetStoreRow(i){
+  const x=STORE_ITEMS[i];if(!confirm('恢复该商品的静态价格与库存？'))return;
+  await api('/api/stores/items/reset',{method:'POST',body:JSON.stringify({store_id:x.store_id,item_id:x.item_id})});toast('已恢复静态货架：'+x.item_id);await loadStoreItems();
+}
+let FISH_AREAS=[];
+async function loadFishAreas(){
+  FISH_AREAS=await api('/api/fish/areas');renderFishAreas();
+  if(!FISH_AREA&&FISH_AREAS.length){await selectFishArea(FISH_AREAS[0].loc)}
+}
+function renderFishAreas(){
+  const q=($('#fishSearch')?.value||'').toLowerCase();const rows=FISH_AREAS.filter(x=>x.loc.toLowerCase().includes(q));
+  $('#fishAreas').innerHTML=rows.map(x=>`<div class="player-row ${FISH_AREA===x.loc?'on':''}" data-loc="${esc(x.loc)}" onclick="selectFishArea(this.dataset.loc)"><div><div class="n mono">${esc(x.loc)}</div><div class="id">${x.fish_count} 个鱼种</div></div></div>`).join('')||'<div class="empty">没有匹配水域</div>';
+}
+async function selectFishArea(loc){FISH_AREA=loc;renderFishAreas();FISH_CFG=await api('/api/fish/config?loc='+encodeURIComponent(loc));renderFishEditor()}
+function renderFishEditor(){
+  if(!FISH_CFG)return;const c=FISH_CFG,s=c.setting;
+  $('#fishEditor').innerHTML=`<div class="section-head"><div><h2 class="mono">${esc(c.area)}</h2><small>${c.fish.length} 个鱼种 · 权重 0 或关闭即排除</small></div><button class="btn" onclick="showAddFish()">+ 添加鱼种</button></div>
+    <div class="form-grid"><div class="field"><label>上鱼概率 (0-1)</label><input id="fishProb" type="number" min="0" max="1" step="0.01" value="${s.bite_probability}"></div><div class="field"><label>固定延迟秒（0=不用）</label><input id="fishFixed" type="number" min="0" step="0.1" value="${s.bite_delay_fixed}"></div><div class="field"><label>延迟倍率</label><input id="fishScale" type="number" min="0" step="0.05" value="${s.bite_delay_scale}"></div><div class="field"><label>普通竿延迟上限</label><input id="fishMax" type="number" min="1" step="0.5" value="${s.bite_delay_max}"></div><div class="field"><label>路亚延迟上限</label><input id="fishLureMax" type="number" min="0.5" step="0.5" value="${s.bite_delay_lure_max}"></div></div>
+    <div class="toolbar" style="margin:16px 0 10px"><input class="grow" id="fishFilter" placeholder="筛选当前水域鱼种" oninput="renderFishRows()"><button class="btn alt sm" onclick="fishSetAll(true)">全部启用</button><button class="btn alt sm" onclick="fishSetAll(false)">全部关闭</button></div><div id="fishRows"></div><div class="actions"><button class="btn good" onclick="saveFishConfig()">保存鱼口配置</button><button class="btn alt" onclick="selectFishArea(FISH_AREA)">撤销修改</button><button class="btn bad" onclick="resetFishConfig()">恢复静态鱼口</button></div>`;
+  renderFishRows();
+}
+function syncFishRows(){
+  if(!FISH_CFG)return;
+  FISH_CFG.fish.forEach((f,i)=>{const w=$('#fw_'+i),e=$('#fe_'+i);if(w)f.weight=+w.value;if(e)f.enabled=e.checked});
+}
+function renderFishRows(){
+  if(!FISH_CFG)return;const q=($('#fishFilter')?.value||'').toLowerCase();
+  const rows=FISH_CFG.fish.map((f,i)=>({f,i})).filter(x=>!q||`${x.f.fish_key} ${x.f.name_zh}`.toLowerCase().includes(q));
+  $('#fishRows').innerHTML=`<div class="table-wrap"><table class="fish-table"><thead><tr><th>启用</th><th>鱼种</th><th>基础权重</th><th>覆盖权重</th><th>来源</th></tr></thead><tbody>${rows.map(({f,i})=>`<tr><td><input class="switch" type="checkbox" id="fe_${i}" ${f.enabled?'checked':''} onchange="syncFishRows()"></td><td><b>${esc(f.name_zh||f.fish_key)}</b><div class="muted mono">${esc(f.fish_key)}</div></td><td>${Number(f.base_weight).toFixed(2)}</td><td><input class="mini-input" id="fw_${i}" type="number" min="0" step="0.1" value="${f.weight}" onchange="syncFishRows()"></td><td>${f.has_override?'<span class="tag gold">覆盖</span>':'<span class="tag">静态</span>'}</td></tr>`).join('')||'<tr><td colspan="5" class="empty">没有匹配鱼种</td></tr>'}</tbody></table></div>`;
+}
+function fishSetAll(on){syncFishRows();FISH_CFG.fish.forEach(f=>f.enabled=on);renderFishRows()}
+async function saveFishConfig(){
+  syncFishRows();const s=FISH_CFG.setting;FISH_CFG.setting={...s,bite_probability:+$('#fishProb').value,bite_delay_fixed:+$('#fishFixed').value,bite_delay_scale:+$('#fishScale').value,bite_delay_max:+$('#fishMax').value,bite_delay_lure_max:+$('#fishLureMax').value};
+  await api('/api/fish/config',{method:'POST',body:JSON.stringify({area:FISH_CFG.area,setting:FISH_CFG.setting,fish:FISH_CFG.fish})});toast('鱼口配置已保存并热生效');await selectFishArea(FISH_AREA);
+}
+async function resetFishConfig(){if(!confirm('清除该水域的全部鱼口覆盖并恢复静态配置？'))return;await api('/api/fish/config/reset',{method:'POST',body:JSON.stringify({area:FISH_AREA})});toast('已恢复静态鱼口');await selectFishArea(FISH_AREA)}
+async function showAddFish(){showModal('添加鱼种到水域','搜索鱼库后添加到当前覆盖列表',`<input id="fishAddSearch" placeholder="中文名或 fish_key" oninput="debounce('fishAdd',searchFishPool)"><div class="results" id="fishAddResults"></div>`);searchFishPool()}
+async function searchFishPool(){const q=$('#fishAddSearch').value.trim();const list=await api('/api/fish/pool?q='+encodeURIComponent(q)+'&limit=80');$('#fishAddResults').innerHTML=list.map(x=>`<div class="result" data-key="${esc(x.fish_key)}" data-name="${esc(x.name_zh)}" onclick="addFishFromPool(this.dataset.key,this.dataset.name)"><div><b>${esc(x.name_zh)}</b><div class="muted mono">${esc(x.fish_key)}</div></div><span class="tag">${fmt(x.min_g)}-${fmt(x.max_g)}g</span></div>`).join('')||'<div class="empty">无结果</div>'}
+function addFishFromPool(key,name){syncFishRows();if(FISH_CFG.fish.some(f=>f.fish_key===key)){closeModal();return toast('该鱼种已在列表','bad')}FISH_CFG.fish.push({fish_key:key,name_zh:name,base_weight:0,weight:1,enabled:true,has_override:true});closeModal();renderFishRows();toast('已加入，记得保存')}
+
+let MAIL_ATTACH=[];
+function addAttachment(){showModal('添加邮件附件','搜索物品目录',`<input id="attachSearch" placeholder="物品 ID / 名称" oninput="debounce('attachSearch',searchAttachItems)"><div class="results" id="attachResults"></div>`);searchAttachItems()}
+async function searchAttachItems(){const q=$('#attachSearch').value.trim();const list=await api('/api/catalog/items?q='+encodeURIComponent(q));$('#attachResults').innerHTML=list.map(x=>`<div class="result" data-id="${esc(x.item_id)}" data-name="${esc(x.name)}" onclick="pickAttachment(this.dataset.id,this.dataset.name)"><div><b>${esc(x.name||x.item_id)}</b><div class="muted mono">${esc(x.item_id)}</div></div><span class="tag">cat ${x.category}</span></div>`).join('')||'<div class="empty">无结果</div>'}
+function pickAttachment(id,name){if(!MAIL_ATTACH.some(x=>x.item_id===id))MAIL_ATTACH.push({item_id:id,name,qty:1});closeModal();renderAttachments();toast('已添加 '+name)}
+function renderAttachments(){
+  $('#attachments').innerHTML=MAIL_ATTACH.map((x,i)=>`<div class="attach-row"><div class="toolbar"><input value="${esc(x.name||x.item_id)}" disabled><div class="muted mono">${esc(x.item_id)}</div></div><input type="number" min="1" value="${x.qty}" onchange="MAIL_ATTACH[${i}].qty=+this.value"><button class="btn bad sm" onclick="MAIL_ATTACH.splice(${i},1);renderAttachments()">×</button></div>`).join('')||'<div class="muted">无附件</div>';
+}
+async function sendMail(){
+  const uid=+$('#mailUid').value,text=$('#mailText').value.trim();if(!uid)return toast('请填写收件人 UID','bad');if(!text&&!MAIL_ATTACH.length)return toast('正文和附件不能都为空','bad');
+  await api('/api/mail/send',{method:'POST',body:JSON.stringify({uid,text,items:MAIL_ATTACH.map(x=>({item_id:x.item_id,qty:+x.qty||1}))})});toast('邮件已进入投递队列');MAIL_ATTACH=[];renderAttachments();
+}
+function previewMail(){const uid=$('#mailUid').value||'未填写';$('#mailPreview').className='';$('#mailPreview').innerHTML=`<div style="padding:14px;border:1px solid var(--line);border-radius:12px;background:#0b1623"><div class="muted">收件人 UID ${esc(uid)}</div><div style="margin:10px 0;white-space:pre-wrap">${esc($('#mailText').value||'(无正文)')}</div><hr style="border:0;border-top:1px solid var(--line)"><div class="muted">附件 ${MAIL_ATTACH.length} 件</div>${MAIL_ATTACH.map(x=>`<div class="pill" style="margin:5px 5px 0 0">${esc(x.name||x.item_id)} × ${x.qty}</div>`).join('')}</div>`}
+function mailTemplate(name){const map={'补偿':'管理员补偿\n\n因近期服务器问题给您带来的不便，特此补偿以下物品，请查收。','活动奖励':'活动奖励\n\n感谢参与本次服务器活动！奖励已随邮件附上。','测试':'测试邮件\n\n这是一封来自管理后台的测试邮件。'};$('#mailText').value=map[name]||map['测试'];previewMail()}
+async function findMailPlayer(){const q=$('#mailPlayerSearch').value.trim();if(!q)return;const list=await api('/api/players?q='+encodeURIComponent(q));if(!list.length)return toast('没有找到玩家','bad');$('#mailUid').value=list[0].uid;toast('已匹配 '+list[0].name+' #'+list[0].uid)}
+function prefillMail(uid){go('mail');$('#mailUid').value=uid;$('#mailText').focus()}
+
+if(TOKEN)boot();else logout();
+</script>
+</body>
+</html>
