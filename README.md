@@ -1,105 +1,126 @@
-# rf4server
+# rf4_server_simulator
 
-`rf4server` 是一个使用 Go 编写的 RF4 本地服务端，包含客户端登录与 realtime 接入、游戏逻辑、SQLite 持久化和 Web 管理后台。项目主要用于本地开发、协议验证和集成测试，不是官方服务端。
+对一款钓鱼游戏的**本地服务端进行模拟与技术研究**的 Go 实现。项目采用三进程架构（接入网关 / 游戏逻辑服务 / Web 管理后台），使用本地单文件 SQLite，尽量做到无外部中间件即可运行。
 
-当前适配的客户端版本为 **4.0.25034**。
+> 本项目由玩家兴趣驱动，不以盈利为目的，不是完整复刻，也不是可直接长期运营的私服方案。
 
-## 组件
+## 项目定位与使用边界
 
-| 组件 | 职责 |
-| --- | --- |
-| `gateway` | HTTPS 登录、token 签发、realtime TCP 接入、协议分帧、RC4 流、ACK 和重连接管。 |
-| `gameserver` | 会话分发、钓鱼、库存、钓组、经济、商店、邮件、技能和管理指令消费。 |
-| `admin` | 使用 JWT 鉴权的 Web 管理后台，可管理玩家、库存、商店、鱼口、邮件、处置和审计日志。 |
-| `seed` | 数据库迁移、静态目录导入、默认玩家档案和管理员初始化。 |
-| `launcher` | Windows 托盘进程管理器，负责首次初始化、启动、健康检查和自动重启。 |
+- 本项目是个人爱好驱动的本地研究项目，主要用于学习和实践协议编解码、会话保序、状态机、数据持久化与服务端工程。
+- 受时间、精力和对完整游戏机制的理解限制，当前进度**无法与成熟私服相比**，也不以追赶或替代私服为目标。
+- 钓鱼系统目前只保证**能够完成上鱼和基础结算**，并没有完整复刻官服的鱼群、概率、生态、活动节奏与长期经济机制。
+- 很多系统仍不完善。部分命令目前只保证协议形状合法、客户端不崩溃，实际业务语义仍在补齐；请不要把本项目视为完整或生产可用的服务端。
+- 本项目**不会开放任何捐款、充值、赞助或付费功能**，维护者不以盈利为目的。
+- **请勿向任何第三方私服充值。** 私服的资金与稳定性没有保障，可能随时关停或跑路，请自行谨慎判断风险。
+- 请遵守当地法律法规、游戏服务条款及相关权利人的要求。本仓库只包含服务端模拟与学习代码，不提供游戏本体。
+
+## 交流与协作
+
+欢迎正在推进同类本地化、协议研究或服务端实现的同仁，通过 Issue、Pull Request 或其他公开渠道交流进展、协议结论和实现思路。
+
+我们更希望把这里作为一个开放的技术交流与协作入口，而不是收费产品或私服运营项目。发现错误、补齐机制或分享兼容性结论，都是非常有价值的贡献。
+
+## 当前实现概览
+
+以下是当前代码已经打通的**主链路和基础机制**，不是完整功能清单：
+
+- **接入与协议**：HTTPS 登录与 token 签发、realtime TCP 握手、帧编解码、
+  RC4 连续密码流、ACK、传输保活、断线重连与 RC4 状态接管；同时具备
+  响应契约校验、推送守卫和协议兜底，避免未知命令直接导致客户端崩溃。
+- **会话与玩家数据**：多会话管理、同 token 重连接管、玩家档案、等级与经验、
+  银币/金币/银行、地图与出生点、旅行、世界时钟、技能树、成就与渔获纪录。
+- **钓鱼主链路**：抛竿、落水、咬钩、刺鱼、搏鱼、收线、结算、入护网与放生；
+  支持竿型、饵、拟饵、钓深、分水域鱼口、路亚短窗节奏，以及钓鱼状态持久化
+  和重连恢复。
+- **物品与钓组**：背包与护网、物品实例与属性、钓组装配/拆卸、子部件物化、
+  强度与耐久、工坊修理、快捷栏绑定。
+- **经济与内容系统**：商店目录、服务端定价、库存覆盖、购买与退货事务、
+  鱼市交易、邮件与附件、制作、竞赛、基础社交资料与纪录。
+- **管理与运维**：Control Deck 管理后台（JWT + 内嵌 SPA）、玩家/库存/技能/
+  商店/鱼口/邮件管理、踢人与封禁、操作审计；launcher 负责进程监督、
+  健康检查和日志面板。
+- **存储与可靠性机制**：SQLite WAL、数据库迁移、静态配置库只读 ATTACH、
+  请求回执与幂等控制、事务化经济操作、唯一约束与数据完整性检查。
+- **隐私与脱敏**：仓库不内嵌可关联到玩家的回放响应、实例 GUID、token 或账号数据；
+  协议兜底只使用结构清单，新手物品在运行时按静态定义生成。
+- **测试与回归**：单元测试、集成测试、协议语料回环测试，以及钓鱼、经济、
+  装配、重连等关键链路的专项回归。
+
+### 已知边界
+
+- 钓鱼玩法以“能稳定完成上鱼与结算”为首要目标，不追求当前阶段完全复刻官服手感、数值和生态。
+- 非核心系统、活动系统和大量边界分支仍在持续补充；协议能够响应不等于业务已经完整实现。
+- 目前仅针对下方标注的客户端版本做适配，其它版本、不同服务端配置和长期运行场景均未验证。
+
+## 架构
 
 ```text
-客户端
-  |-- HTTPS 登录 ----> gateway ----> gameserver ----> SQLite
-  |-- realtime TCP --> gateway            ^
-                                         |
-                                admin ---+
+游戏客户端（hosts 指向本机）
+   │ HTTPS :443 登录              TCP :9341 实时
+   ▼                              ▼
+┌─────────────── gateway ────────────────┐
+│ 登录应答（token 签发）/ TCP 接入 / 握手 │
+│ 帧编解码 / RC4 双向加解密 / ACK / 保活  │
+│ 重连接管（RC4 状态落库）                │
+└──────────────┬─────────────────────────┘
+                │ 内部隧道（明文 RPC 信封，PSK 握手）
+                ▼
+┌────────────── gameserver ──────────────┐        ┌──── admin :8080 ────┐
+│ 信封编解码 / 命令分发 / 推送守卫        │◄───────│ Web 管理后台        │
+│ 钓鱼闭环 / 物品 / 商店 / 邮箱           │ 共享   │ 玩家/库存/鱼口/邮件  │
+└──────────────┬─────────────────────────┘ SQLite └─────────────────────┘
+                ▼
+        data/rf4server.db（单文件，WAL）
+              + server_data/static.sqlite3（运行期只读 ATTACH）
 ```
 
-## 环境要求
+- **gateway**：客户端唯一入口。持有 RC4 会话加密（密码流跨帧连续）、先 ACK
+  后转发、传输保活、断线重连接管。
+- **gameserver**：游戏逻辑。命令分发、推送守卫（形状不符拒发）、钓鱼闭环、
+  物品/商店/邮箱/技能；管理指令经共享 SQLite 队列消费。
+- **admin**：Control Deck 管理后台（JWT + 内嵌 SPA，无外部依赖）。玩家档案/
+  货币/等级/技能熟练度、背包与护网增删、商店库存覆盖、分水域鱼口控制、
+  多附件邮件、踢人/封禁与全操作审计。
 
-- Go 1.27.3 或更高版本。
-- `launcher` 仅支持 Windows；其余服务端程序可构建到 Go 支持的其他平台。
-- 能够监听 TCP 443 和 9341 端口。
-- 本机端口 8080、9401、9500-9503 未被占用。
+## 适用客户端与接入准备
 
-## 构建
+- **适用客户端版本：4.0.25034**；其他版本尚未验证。
+- **修改 hosts 把登录域名指向本机**（需管理员权限）：
+  编辑 `%SystemRoot%\System32\drivers\etc\hosts`，追加以下内容后保存：
+  ```text
+  127.0.0.1 api.rf4game.ru
+  127.0.0.1 api.rf4game.com
+  ```
+- **信任本地证书**：首次运行 gateway 会自动生成自签名证书 `certs/server.crt`，
+  双击安装到“受信任的根证书颁发机构”（客户端登录走 HTTPS，需要信任它）。
+- 测完想回官服：把 hosts 里添加的行删掉即可。
 
-Windows PowerShell：
+## 快速开始（一键）
+
+双击或运行 `bin/launcher.exe`（无需任何命令行）：
+
+- 首次运行自动创建 `data/` 并初始化本地数据库（迁移 + 静态配置导入 + 默认管理员 `admin/admin123`）
+- 按序启动 gameserver → gateway → admin 并做健康检查；**崩溃自动重启**（指数退避）
+- **系统托盘常驻**：绿=全部运行 / 黄=部分 / 红=停止；菜单可打开面板/管理后台、启停全部、退出
+- **控制面板** `http://127.0.0.1:9500`：状态卡片、单进程启停/重启、三路实时日志
+- **管理后台** `http://127.0.0.1:8080`
+
+进阶（可选命令行）：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\build.ps1
+bin\seed.exe       -config config.yaml                                   # 仅初始化数据库
+bin\gameserver.exe -config config.yaml                                   # 单独运行某进程
+bin\admin.exe      -config config.yaml -init-admin admin:自定义密码       # 自定义管理员
 ```
 
-安装 GNU Make、MSYS2 或 Git Bash 后也可以使用：
+## 不熟悉命令行时如何运行
 
-```bash
-make build
-```
-
-构建产物位于 `bin/`。
-
-## 配置
-
-1. 将 `config.example.yaml` 复制为 `config.yaml`。
-2. 将 `gateway.tunnel.psk` 与 `game.tunnel.psk` 设置为同一个非空值。
-3. 对外使用前替换 `admin.jwt_secret`、`admin.password` 和隧道 PSK。
-4. 将 `gateway.advertise_host` 设置为客户端可访问的 realtime 地址。
-5. 保持 `sqlite.static_path` 指向 `server_data/static.sqlite3`。
-
-`config.yaml` 已被 Git 忽略。`config.example.yaml` 中说明了各配置项及支持的 `RF4_*` 环境变量覆盖方式。
-
-## 运行
-
-`launcher` 会在首次运行时初始化数据库，随后启动 `gameserver`、`gateway` 和 `admin`，并负责健康检查和异常重启：
-
-```text
-bin\launcher.exe
-```
-
-控制面板：`http://127.0.0.1:9500`
-
-手动启动：
-
-```powershell
-bin\seed.exe       -config config.yaml
-bin\gameserver.exe -config config.yaml
-bin\gateway.exe    -config config.yaml
-bin\admin.exe      -config config.yaml
-```
-
-管理后台：`http://127.0.0.1:8080`
-
-本地测试配置默认使用 `admin` / `admin123`，非本地环境使用前必须修改。
-
-## 客户端接入
-
-使用默认登录域名时，在 Windows hosts 文件中加入：
-
-```text
-127.0.0.1 api.rf4game.ru
-```
-
-如果客户端还会请求其他登录域名，需要一并映射，并提供覆盖对应域名的证书。
-
-`gateway` 首次启动时会生成 `certs/server.crt` 和 `certs/server.key`。在本机测试环境中，需要将 `server.crt` 安装到“受信任的根证书颁发机构”，客户端才能完成 HTTPS 登录。不要发布私钥。
-
-登录接口不校验游戏账号。它按配置的 user ID 签发 token，realtime 接入也不构成账号安全边界。服务只应运行在本机或可信网络中。
-
-## 给非开发者的运行说明
-
-如果你不熟悉命令行，或者不知道如何编译、修改 hosts、把自签名证书加入“受信任的根证书颁发机构”，可以先安装 Go 1.27.3 或更高版本，然后让 Dsh、豆包、WorkBuddy、Codex 等智能体按你的系统协助完成。操作前建议备份 hosts；不要上传或分享 `config.yaml`、`certs/`、`data/`。
+如果你不知道如何编译、修改 hosts、安装证书，可以先安装 Go 1.27.3 或更高版本，然后让 Dsh、豆包、WorkBuddy、Codex 等智能体根据你的系统协助完成。操作前建议备份 hosts，并且不要上传或分享 `config.yaml`、`certs/`、`data/`。
 
 下面的 prompt 可以按需修改路径后直接使用：
 
 ```text
-请帮我在这台 Windows 电脑上部署并启动 D:\Code\rf4_go_public 里的 rf4server。
+请帮我在这台 Windows 电脑上部署并启动 D:\Code\rf4_go_public 里的 rf4_server_simulator。
 
 请先检查：
 - Windows 版本，以及当前是否以管理员权限运行；
@@ -110,35 +131,63 @@ bin\admin.exe      -config config.yaml
 1. 阅读 README.md、config.yaml 和 docs/deploy.md，说明你将执行的操作。
 2. 构建项目，确认 bin 下生成 gateway.exe、gameserver.exe、admin.exe、seed.exe 和 launcher.exe。
 3. 检查 config.yaml 中 gateway.tunnel.psk 与 game.tunnel.psk 一致，sqlite.static_path 指向 server_data/static.sqlite3。
-4. 备份 C:\Windows\System32\drivers\etc\hosts，然后把 api.rf4game.ru 指向 127.0.0.1。
+4. 备份 C:\Windows\System32\drivers\etc\hosts，然后把 api.rf4game.ru 和 api.rf4game.com 指向 127.0.0.1。
 5. 启动一次 gateway 生成 certs/server.crt 和 certs/server.key，并指导我把 server.crt 安装到“受信任的根证书颁发机构”。不要上传或分享私钥。
 6. 启动 bin\launcher.exe，检查 http://127.0.0.1:9500、http://127.0.0.1:8080 以及各服务健康检查。
 7. 只做构建和运行配置修复，不改变业务逻辑。每一步告诉我执行内容、结果和失败原因；需要管理员权限时先停下让我确认。
 ```
 
-## 测试
+## 构建
 
-```bash
-make test      # go vet 和全部测试
-go test ./...  # 只运行测试
-make corpus    # 可选的协议语料回环测试
+```powershell
+# Windows（PowerShell）
+powershell -File build.ps1          # 产物在 bin/
+
+# 或 make（Git Bash / Linux）
+make build
 ```
 
-未安装可选语料时，corpus 测试会自动跳过。
+依赖 Go 1.27.3+，纯 Go 依赖（SQLite 驱动为 modernc.org/sqlite，无 CGO）。
 
-## 数据
+## 配置
 
-- 主数据库：`sqlite.path`，默认 `data/rf4server.db`，由各服务进程共享。
-- 静态目录：`sqlite.static_path`，默认 `server_data/static.sqlite3`，运行期以只读方式附加。
-- 证书：默认位于 `certs/`，该目录已被 Git 忽略。
+- `config.example.yaml`：模板（入库）
+- `config.yaml`：实际配置（**不入库**，从模板复制后修改）
+- 静态库：`sqlite.static_path`（默认 `server_data/static.sqlite3`），三进程运行期只读 ATTACH
+- 环境变量覆盖：`RF4_SQLITE_PATH`、`RF4_SQLITE_STATIC_PATH`、`RF4_LOG_LEVEL` 等（见 `internal/config`）
 
-## 文档
+## 运行
 
-- [部署说明](docs/deploy.md)
-- [管理后台](docs/admin-console.md)
-- [客户端兼容检查清单](docs/client-checklist.md)
-- [商店目录](docs/shop_catalog.md)
-- [静态数据隔离](docs/static_runtime_isolation.md)
+```powershell
+bin\seed.exe       -config config.yaml   # 初始化本地数据库（幂等，仓库自带静态配置库）
+bin\gameserver.exe -config config.yaml
+bin\gateway.exe    -config config.yaml
+bin\admin.exe      -config config.yaml -init-admin admin:你的密码
+```
+
+详细步骤、管理后台说明、协议约束与故障排查见 [docs/deploy.md](docs/deploy.md)。
+
+## 开发
+
+```bash
+make test      # go vet + 全部单测（含端到端钓鱼闭环，无需外部服务）
+make corpus    # 语料回环测试（语料文件不在仓库中时自动跳过）
+```
+
+## 目录速览
+
+```text
+cmd/launcher                        图形化常驻监督器（托盘+面板）
+cmd/gateway|gameserver|admin|seed   服务进程与初始化工具
+internal/proto                      协议字节层（帧/RC4/值标记/信封）
+internal/wiregen                    生成的类型表（364 类）+ 语料回环门
+internal/tunnel                     网关↔主服内部隧道
+internal/gateway                    登录 HTTPS / realtime TCP / 会话
+internal/gameserver                 会话核 / 处理器 / 钓鱼 / 物品 / 商店
+internal/store                      SQLite 存储层 + 迁移
+internal/admin                      管理 API + 内嵌 SPA
+docs/                               部署手册 / 回归清单
+```
 
 ## 客户端兼容与实现范围
 
@@ -146,6 +195,6 @@ make corpus    # 可选的协议语料回环测试
 - 目前已测试的钓法为：**手杆、简易沉底、简易路亚**。
 - 所有实现均为较简实现，以客户端能够顺畅运行和完成基础玩法闭环为主要目标；没有复刻官服的手感、概率、生态或完整机制。
 
-## 许可证
+## 许可
 
-MIT，详见 [LICENSE](LICENSE)。
+项目采用 **MIT 协议**（见 [LICENSE](LICENSE)）。本 README 中的项目定位与使用边界用于说明维护者立场，不改变许可证本身授予的权利与义务。
