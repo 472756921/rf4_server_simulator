@@ -26,7 +26,7 @@ const (
 	// boatTicketSubtype 是 pfapfdlnfbj.fhblahbelfd：客户端用该子类型位判定
 	// 这张票"可用/已租用"（annldpcofdn.nfaeiabefpo 直接比较等于 16）。
 	boatTicketSubtype = 16
-	// boatTicketDurationAttr 是船票定义里的租用时长（秒）。
+	// boatTicketDurationAttr 是船票定义里的租用时长（分钟）。
 	boatTicketDurationAttr = "gloegohmand"
 )
 
@@ -58,12 +58,32 @@ func hCheckTicket(ctx *Ctx) ([]byte, bool) {
 	if len(ints) > 0 {
 		station = ints[0]
 	}
-	if len(guids) == 0 {
-		ctx.Log.Info("3/7 验票：请求未带票 GUID，回 null", "station", station)
+	// 客户端会发 [站点, null guid] 来问"这个码头有哪些票可用"。
+	// null guid 解码后是 32 个 0，必须当成"没有指定票"，否则会去查一个
+	// 全零 GUID 而永远查不到，选票框就是空的。
+	var realGUIDs []string
+	for _, g := range guids {
+		if !isZeroGUID(g) {
+			realGUIDs = append(realGUIDs, g)
+		}
+	}
+	if len(realGUIDs) == 0 {
+		// 客户端按 E 时会先发一条不带 GUID 的 3/7（只带站点），用它决定
+		// "这个码头有哪些票可用"。之前回 null，选票框就是空的；这里按站点
+		// 从背包里挑一张船票回过去。
+		if tree := srv.pickStationTicket(ctx, station); tree != nil {
+			body, err := proto.EncodeValue(tree, ctx.Sess.Table())
+			if err == nil {
+				ctx.Log.Info("3/7 验票：按站点选中船票", "station", station)
+				return body, true
+			}
+			ctx.Log.Warn("3/7 验票：按站点选票编码失败", "err", err)
+		}
+		ctx.Log.Info("3/7 验票：请求未带票 GUID 且无匹配站点票，回 null", "station", station)
 		return []byte{0x00}, true
 	}
 
-	for _, g := range guids {
+	for _, g := range realGUIDs {
 		row, err := srv.DB.GetItemByGUID(cctx, g)
 		if err != nil || row == nil || row.UID != ctx.Sess.Userid {
 			continue
@@ -101,8 +121,85 @@ func hCheckTicket(ctx *Ctx) ([]byte, bool) {
 		return body, true
 	}
 
-	ctx.Log.Info("3/7 验票：没有可用船票，回 null", "station", station, "guids", len(guids))
+	ctx.Log.Info("3/7 验票：没有可用船票，回 null", "station", station, "guids", len(realGUIDs))
 	return []byte{0x00}, true
+}
+
+// isZeroGUID 判断解码出的 GUID 是否为空（null guid 表示为 32 个 0）。
+func isZeroGUID(g string) bool {
+	for i := 0; i < len(g); i++ {
+		if g[i] != '0' {
+			return false
+		}
+	}
+	return true
+}
+
+// pickStationTicket 按站点在背包里挑一张船票，返回已投影为“可用”形态的树。
+//
+// 站点为 0 时表示不限站点（部分码头不下发站点枚举）。挑中时会顺手把票
+// 标记为可用并落库，保证客户端后续再查同一张票时数据一致。
+func (s *Server) pickStationTicket(ctx *Ctx, station uint64) *proto.Value {
+	cctx := ctx.Sess.pushCtx()
+	guids, err := s.DB.ItemGUIDsByContainers(cctx, ctx.Sess.Userid, []string{"backpack"})
+	if err != nil {
+		ctx.Log.Warn("3/7 按站点选票：读背包失败", "err", err)
+		return nil
+	}
+	for _, g := range guids {
+		row, rerr := s.DB.GetItemByGUID(cctx, g)
+		if rerr != nil || row == nil || row.UID != ctx.Sess.Userid || row.TypeID != boatTicketTypeID {
+			continue
+		}
+		def, derr := s.DB.GetItemDef(cctx, row.NumericID)
+		if derr != nil {
+			def = nil
+		}
+		if station > 0 && def != nil {
+			if st, ok := defAttrU64(def, boatTicketStationAttr); ok && st != station {
+				continue
+			}
+		}
+		if _, ok := markTicketUsable(cctx, s.DB, row, def); ok {
+			ctx.Log.Info("3/7 按站点选票：船票已标记可用", "guid", guidShort(g), "item", row.ItemID)
+		}
+		tree, terr := s.ItemToTree(cctx, row)
+		if terr != nil {
+			ctx.Log.Warn("3/7 按站点选票：物化失败", "guid", guidShort(g), "err", terr)
+			continue
+		}
+		ctx.Log.Info("3/7 按站点选票命中", "guid", guidShort(g), "item", row.ItemID, "station", station)
+		return tree
+	}
+	return nil
+}
+
+// applyTicketUsableToTree 把船票树投影成客户端认可的“可用票”形态：
+// 子类型含 16、到期时间未过。只改内存中的树，不落库，因此登录快照、
+// 背包列表和验票响应三处看到的值永远一致。
+//
+// 状态位保持定义值（20992）不动：客户端选票过滤器走的是
+// "state != 16384" 这一支；若把状态位改成 16384，反而会进入
+// "要求物品大类为 1..2" 的分支，船票（大类 39）会被直接排除。
+func applyTicketUsableToTree(obj *proto.Value, class string, def *store.ItemDef) {
+	if obj == nil || class == "" {
+		return
+	}
+	if idx := fieldIdxByCS(class, csSubtype); idx >= 0 && idx < len(obj.Fields) {
+		obj.Fields[idx].Num = ptrU64(u64Of(obj.Fields[idx].Num) | boatTicketSubtype)
+	}
+	if idx := fieldIdxByCS(class, csUpdated); idx >= 0 && idx < len(obj.Fields) {
+		now := uint64(proto.WindowsFiletimeNow())
+		if u64Of(obj.Fields[idx].Num) <= now {
+			minutes := uint64(60)
+			if def != nil {
+				if v, ok := defAttrU64(def, boatTicketDurationAttr); ok && v > 0 {
+					minutes = v
+				}
+			}
+			obj.Fields[idx].Num = ptrU64(now + minutes*60*10_000_000)
+		}
+	}
 }
 
 // markTicketUsable 把船票写成"可用"状态：
@@ -137,7 +234,8 @@ func markTicketUsable(ctx context.Context, db *store.DB, row *store.Item, def *s
 					secs = v
 				}
 			}
-			fields[idx].Num = ptrU64(now + secs*10_000_000)
+			// gloegohmand 的单位是分钟（120 小时的票 = 7200）。
+			fields[idx].Num = ptrU64(now + secs*60*10_000_000)
 			changed = true
 		}
 	}

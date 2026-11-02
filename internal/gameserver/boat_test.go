@@ -23,6 +23,18 @@ func TestCheckTicket(t *testing.T) {
 		t.Fatalf("船票 type_id 应为 %d，实得 %d（wire %s）", boatTicketTypeID, it.TypeID, it.WireClass)
 	}
 
+	// 物化层投影：不管票在库里是什么形态，发给客户端时必须已是“可用票”，
+	// 否则登录快照里的票会被客户端选票过滤器排除（表现为选票框空白）。
+	tree, err := srv.ItemToTree(ctx, it)
+	if err != nil {
+		t.Fatalf("物化船票失败: %v", err)
+	}
+	if idx := fieldIdxByCS(it.WireClass, csSubtype); idx >= 0 {
+		if got := u64Of(tree.Fields[idx].Num); got&boatTicketSubtype == 0 {
+			t.Fatalf("物化后子类型应含 %d，实得 %d", boatTicketSubtype, got)
+		}
+	}
+
 	// 命中：返回船票对象本身。
 	req := proto.Args524(proto.U32(1), proto.GuidArr([]string{it.GUID}))
 	body, ok := hCheckTicket(miscCtx(sess, 3, 7, req))
@@ -46,5 +58,21 @@ func TestCheckTicket(t *testing.T) {
 	}
 	if len(body2) != 1 || body2[0] != 0x00 {
 		t.Fatalf("未命中应回 null(0x00)，实得 %x", body2)
+	}
+
+	// 客户端按 E 时会发 [站点, null guid]（marker 0x17）询问该码头可用的票。
+	// 必须按站点回一张真票，否则选票框是空的。
+	nullGUID := proto.Args524(proto.U32(1), proto.Guid(strings.Repeat("0", 32), 0x17))
+	body3, ok3 := hCheckTicket(miscCtx(sess, 3, 7, nullGUID))
+	if !ok3 || len(body3) == 0 {
+		t.Fatal("3/7 null guid 未处理")
+	}
+	dec3, _, err3 := proto.DecodeValue(body3, 0, srv.Table())
+	if err3 != nil {
+		t.Fatalf("3/7 null guid 响应不可解码: %v", err3)
+	}
+	if dec3.Kind != proto.KindObj || dec3.TypeID != boatTicketTypeID {
+		t.Fatalf("null guid 应按站点回 type_id=%d 的票，实得 kind=%s type=%d",
+			boatTicketTypeID, dec3.Kind, dec3.TypeID)
 	}
 }

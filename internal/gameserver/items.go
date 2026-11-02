@@ -180,12 +180,23 @@ func (s *Server) ItemToTree(ctx context.Context, it *store.Item) (*proto.Value, 
 	class := it.WireClass
 
 	// 状态位零值兜底（存量行为 0 → 客户端当未初始化）
-	if def, derr := s.DB.GetItemDef(ctx, it.NumericID); derr == nil && def != nil {
+	def, derr := s.DB.GetItemDef(ctx, it.NumericID)
+	if derr != nil {
+		def = nil
+	}
+	if def != nil {
 		stateFlagsZeroFill(class, obj, def)
 		// 先补齐嵌套子配置，再按定义+条件统一投影物理字段。这里不是“零值兜底”：
 		// 强度、曳力、成色、容器枚举都由权威数据推导，保证发给客户端的树一致。
 		s.materializeInto(ctx, class, def, obj, it.GUID, it.Workmanship, it.Durability)
 		s.canonicalizeItemPhysicalFields(ctx, it, obj.Fields)
+	}
+
+	// 船票：客户端选票过滤器要求状态位精确等于 16384、子类型含 16、未过期。
+	// 票定义里下发的是 20992，因此在每次物化时统一投影，保证登录快照（4/5）
+	// 与验票响应（3/7）看到的是同一份可用形态。
+	if it.TypeID == boatTicketTypeID {
+		applyTicketUsableToTree(obj, class, def)
 	}
 
 	// 鱼竿动态接管（竿上组件/钓组/挂线挂轮必须现算，快照过期会让插槽列表失真）
