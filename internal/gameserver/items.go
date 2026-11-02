@@ -180,7 +180,11 @@ func (s *Server) ItemToTree(ctx context.Context, it *store.Item) (*proto.Value, 
 	class := it.WireClass
 
 	// 状态位零值兜底（存量行为 0 → 客户端当未初始化）
-	if def, derr := s.DB.GetItemDef(ctx, it.NumericID); derr == nil && def != nil {
+	def, derr := s.DB.GetItemDef(ctx, it.NumericID)
+	if derr != nil {
+		def = nil
+	}
+	if def != nil {
 		stateFlagsZeroFill(class, obj, def)
 		// 先补齐嵌套子配置，再按定义+条件统一投影物理字段。这里不是“零值兜底”：
 		// 强度、曳力、成色、容器枚举都由权威数据推导，保证发给客户端的树一致。

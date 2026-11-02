@@ -18,6 +18,11 @@ import (
 // 所有出站信封经 sendMu 串行化：分配推送 call_id、构造信封和发送在同一锁内完成，
 // 保证客户端看到的 call_id 严格递增，并与网关的隧道路由顺序一致。
 type Session struct {
+	// keepaliveTicks 保活循环计数，用于低频任务（船票清理）。
+	keepaliveTicks int64
+	// startedAt 本会话登录时刻。客户端世界时钟从登录起按 24 倍速推进，
+	// 船票倒计时的"起始游戏时间"就是按它算的。
+	startedAt time.Time
 	ID     uint64 // 网关分配的会话号
 	Token  string
 	Userid int64
@@ -45,6 +50,7 @@ func newSession(srv *Server, id uint64, token string, userid int64, c *tunnel.Co
 		Srv:    srv,
 		tunnel: c,
 		state:  map[string]any{},
+		startedAt: time.Now(),
 		stopCh: make(chan struct{}),
 		log:    srv.log.With("userid", userid, "sid", id),
 	}
@@ -92,7 +98,7 @@ func (s *Session) SendEnvelope(env []byte) {
 // 服务端推送 body 的顶层必须是 args，并符合 command_contract 的 push_args 声明。
 // 形状不符时只丢弃该推送，避免破坏客户端通道。
 func (s *Session) Push(main, sub uint8, body *proto.Value) uint32 {
-	if s.closed.Load() {
+	if s.closed.Load() || s.tunnel == nil {
 		return 0
 	}
 	bodyBytes, err := proto.EncodeValue(body, s.Srv.table)
@@ -200,6 +206,14 @@ func (s *Session) startKeepalive() {
 					return
 				}
 				pushKeepalive(s)
+				// 每 6 拍（约 30 秒）刷新一次已租用船票的剩余分钟，
+				// 让客户端的到期提示随时间递减（客户端自身不会重算）。
+				// 每 6 拍（约 30 秒）清理一次已到期的租用船票。
+				// 注意：只做"到期移除"，不反复重建物品，避免客户端 UI 卡死。
+				s.keepaliveTicks++
+				if s.keepaliveTicks%6 == 0 {
+					s.expireRentalTickets()
+				}
 				timer.Reset(interval)
 			}
 		}
