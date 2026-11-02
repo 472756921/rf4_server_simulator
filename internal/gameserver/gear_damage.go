@@ -39,7 +39,7 @@ type gearBreakOutcome struct {
 // 路亚也在其中：线断后拟饵、钩、前导和饵都不可能留在竿上。
 var lineBreakTerminalCategories = map[int64]bool{
 	catHook: true, catLead: true, catLeaderLock: true, catWireLeader: true,
-	catLure: true, catBait: true,
+	catLure: true, catBait: true, catFloat: true,
 }
 
 // sourceLineCategories 包含主线及前导/钢丝前导。断任何一项都按断线处理。
