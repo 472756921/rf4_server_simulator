@@ -46,6 +46,10 @@ func registerBoatHandlers(d *Dispatch) {
 
 // hCheckTicket 处理 3/7：请求参数为 [站点枚举, 船票 GUID]。
 func hCheckTicket(ctx *Ctx) ([]byte, bool) {
+	// 上船验票前，先清掉"已消耗"的票：到期后我们把 knpoijanngk 置 0 并保留
+	// 租用记录作为标记，这里连同租用记录一起删除并把 4/21 推给客户端。
+	cleanupConsumedTickets(ctx)
+
 	srv := ctx.Sess.Srv
 	if !srv.requireDB(ctx) {
 		return nil, false
@@ -232,7 +236,8 @@ func (s *Server) startTicketRent(ctx *Ctx, row *store.Item, def *store.ItemDef) 
 	// 票的到期时间直接对齐到"现在 + 租期"：客户端提示里的"X 后过期"
 	// 就是用这个字段算的，若只延长不缩短，短租期测试会显示成票的原始时长。
 	if idx := fieldIdxByCS(row.WireClass, csUpdated); idx >= 0 && idx < len(fields) {
-		realMin := minutes / 24
+		// 游戏时间 24 倍速：现实分钟 = ceil(游戏分钟 / 24)
+		realMin := (minutes + 23) / 24
 		if realMin < 1 {
 			realMin = 1
 		}
@@ -351,7 +356,8 @@ func (s *Session) pushTicketRemaining() {
 		start := u64Of(rent.Fields[2].Num)
 		dur := u64Of(rent.Fields[3].Num)
 		// 票时长是"游戏分钟"（24 倍速），换算成现实分钟判断是否到期。
-		realDur := dur / 24
+		// 游戏时间 24 倍速：现实分钟 = ceil(游戏分钟 / 24)
+		realDur := (dur + 23) / 24
 		if realDur < 1 {
 			realDur = 1
 		}
@@ -409,18 +415,86 @@ func (s *Session) expireRentalTickets() {
 		start := u64Of(rent.Fields[2].Num)
 		dur := u64Of(rent.Fields[3].Num)
 		// 票时长是游戏分钟（24 倍速），换算成现实分钟。
-		realDur := dur / 24
+		// 游戏时间 24 倍速：现实分钟 = ceil(游戏分钟 / 24)
+		realDur := (dur + 23) / 24
 		if realDur < 1 {
 			realDur = 1
 		}
 		if start+realDur > nowMin {
 			continue
 		}
+		// 到期先"取消使用中"：推 4/22 让 HUD 立刻恢复正常，
+		// 票本身保留到玩家下船时再删除（避免船上出现"UI 在用、服务端没有"的矛盾）。
+		if ki < len(fields) {
+			fields[ki].Num = ptrU64(0)
+		}
+		fj, jerr := FieldsToJSON(fields)
+		if jerr != nil {
+			continue
+		}
+		if uerr := s.Srv.DB.UpdateItemFields(cctx, g, fj, row.Qty, row.Durability, row.Workmanship, row.RigGUID); uerr != nil {
+			s.log.Error("船票到期状态写回失败", "guid", guidShort(g), "err", uerr)
+			continue
+		}
+		tree, terr := s.Srv.ItemToTree(cctx, row)
+		if terr != nil {
+			continue
+		}
+		if vi := fieldIdxByCS(row.WireClass, "oieepfcgjgn"); vi >= 0 && vi < len(tree.Fields) {
+			tree.Fields[vi].Num = ptrU64(0)
+		}
+		s.Push(4, 21, proto.Args524(proto.GuidArr([]string{g})))
+		s.Push(4, 22, proto.Args(proto.S("61"), tree))
+		s.log.Info("船票到期，已取消使用中", "guid", guidShort(g), "dur", dur)
+	}
+}
+
+// cleanupConsumedTickets 删除已到期并被取消使用中的船票（已消耗）。
+func cleanupConsumedTickets(ctx *Ctx) {
+	if ctx == nil || ctx.Sess == nil || ctx.Sess.Srv == nil || ctx.Sess.Srv.DB == nil {
+		return
+	}
+	s := ctx.Sess
+	cctx := s.pushCtx()
+	guids, err := s.Srv.DB.ItemGUIDsByContainers(cctx, s.Userid, []string{"backpack"})
+	if err != nil {
+		return
+	}
+	nowMin := uint64(time.Now().Unix() / 60)
+	for _, g := range guids {
+		row, rerr := s.Srv.DB.GetItemByGUID(cctx, g)
+		if rerr != nil || row == nil || row.TypeID != boatTicketTypeID {
+			continue
+		}
+		fields, ferr := FieldsFromJSON(row.FieldsJSON)
+		if ferr != nil {
+			continue
+		}
+		ki := fieldIdxByCS(row.WireClass, "knpoijanngk")
+		if ki < 0 || ki >= len(fields) || u64Of(fields[ki].Num) != 0 {
+			continue
+		}
+		ri := fieldIdxByCS(row.WireClass, "bkmnbppciao")
+		if ri < 0 || ri >= len(fields) || fields[ri].Val == nil || fields[ri].Val.Kind != proto.KindObj {
+			continue
+		}
+		rent := fields[ri].Val
+		if len(rent.Fields) < 4 {
+			continue
+		}
+		start := u64Of(rent.Fields[2].Num)
+		dur := u64Of(rent.Fields[3].Num)
+		realDur := (dur + 23) / 24
+		if realDur < 1 {
+			realDur = 1
+		}
+		if start+realDur > nowMin {
+			continue // 还没到期，保留
+		}
 		if derr := s.Srv.DB.DeleteItems(cctx, []string{g}); derr != nil {
-			s.log.Error("过期船票删除失败", "guid", guidShort(g), "err", derr)
 			continue
 		}
 		s.Push(4, 21, proto.Args524(proto.GuidArr([]string{g})))
-		s.log.Info("船票到期已移除", "guid", guidShort(g), "dur", dur)
+		s.log.Info("已消耗船票已删除", "guid", guidShort(g))
 	}
 }
