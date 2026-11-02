@@ -8,12 +8,11 @@ import (
 	"rf4server/internal/wiregen"
 )
 
-func registerTimelineHandlers(d *Dispatch) {
-	// fire-and-forget：客户端不等响应，绝不回包
-	d.Register(1, 7, hNoReply)   // game/locale 区域上报
-	d.Register(1, 15, hNoReply)  // game/enter_place_notify 进入地图单向通知
-	d.Register(3, 10, hNoReply)  // boat_use 上报类，无应答
-	d.Register(1, 18, hBoolTrue) // game/telemetry 设备指纹 → bool true
+func registerTimelineHandlers(d *Dispatch) { // fire-and-forget：客户端不等响应，绝不回包
+	d.Register(1, 7, hNoReply)     // game/locale 区域上报
+	d.Register(1, 15, hNoReply)    // game/enter_place_notify 进入地图单向通知
+	d.Register(3, 10, hBoatUseLog) // boat_use 上报类：当前只记录请求体，便于分析上船协议
+	d.Register(1, 18, hBoolTrue)   // game/telemetry 设备指纹 → bool true
 
 	// 空集/无数据语义
 	d.Register(6, 2, hNull)          // comp/load 无竞赛 → null
@@ -99,4 +98,13 @@ func hStoreRealList(ctx *Ctx) ([]byte, bool) {
 		return emptyArgsBody(), true
 	}
 	return body, true
+}
+
+// hBoatUseLog 处理 3/10 boat_use。
+// 当前没有上船/载具实现，这里只记录请求体，便于分析客户端按 E 后发送的内容。
+func hBoatUseLog(ctx *Ctx) ([]byte, bool) {
+	if ctx.Log != nil {
+		ctx.Log.Info("3/10 boat_use", "len", len(ctx.Body), "hex", traceHexHead(ctx.Body, 160))
+	}
+	return nil, true
 }
