@@ -182,7 +182,7 @@ func TestFishingStateNoSessionThenReconnect(t *testing.T) {
 	}
 }
 
-func TestBuildFish27MissingHookUsesZeroGUID(t *testing.T) {
+func TestBuildFish27MissingHookFallsBackToFishGUID(t *testing.T) {
 	srv := NewServer(config.Game{
 		Tunnel: config.Tunnel{PSK: "fishing-hook-fallback-test"},
 	}, logging.Discard(), nil)
@@ -194,7 +194,7 @@ func TestBuildFish27MissingHookUsesZeroGUID(t *testing.T) {
 		LengthM:  0.1981,
 	}
 	obj := srv.buildFish27(f, "", "11111111111111111111111111111111")
-	if got := obj.Field(23).Hex; got != zeroGUID {
-		t.Fatalf("27.f23 缺 hook 时应为全零 GUID，实得 %s", got)
+	if got := obj.Field(23).Hex; got != f.FishGUID {
+		t.Fatalf("27.f23 缺 hook 时应回退鱼 GUID %s，实得 %s", f.FishGUID, got)
 	}
 }

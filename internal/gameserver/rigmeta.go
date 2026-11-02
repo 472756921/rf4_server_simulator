@@ -70,28 +70,6 @@ var bottomRigTypes = map[int64]bool{
 var rigTypeLureFamily = map[int64]bool{
 	5: true, 6: true, 7: true, 8: true, 9: true, 10: true, 11: true,
 	19: true, 20: true, 22: true,
-	50: true, 51: true, 52: true, 53: true, 54: true,
-}
-
-// rigAcceptsLureComponent 判断当前钓组物理类是否支持挂载拟饵组件。
-// Picker/Feeder/浮钓等非拟饵钓组即使客户端误发 17/2，也不能装入 spinner 类拟饵。
-func (s *Server) rigAcceptsLureComponent(ctx context.Context, rodGUID string) bool {
-	row, err := s.DB.GetItemByGUID(ctx, rodGUID)
-	if err != nil || row == nil {
-		return false
-	}
-	rigType := s.rigTypeOfItem(ctx, row)
-	if def, derr := s.itemDefForRow(ctx, row); derr == nil && def != nil {
-		rodType := rodDefRodType(def)
-		if allowed, ok := rodRigAllowed[rodType]; ok && len(allowed) > 0 && !allowedContains(allowed, rigType) {
-			rigType = s.defaultRigTypeForRod(ctx, row.ItemID)
-		}
-	}
-	return rigTypeAcceptsLureComponent(rigType)
-}
-
-func rigTypeAcceptsLureComponent(rigType int64) bool {
-	return rigTypeLureFamily[rigType] || len(slotIndicesFor(rigType, catLure)) > 0
 }
 
 // defaultRigTypeForRod 按竿型选择第一个有资源名映射的允许钓组。
@@ -177,40 +155,13 @@ func (s *Server) mountedHookGuid(ctx context.Context, rodGUID string) string {
 	if rodGUID == "" {
 		return ""
 	}
-	candidates := make([]string, 0, 2)
 	if g, err := s.DB.GetItemGUIDByRigSlot(ctx, rodGUID, 12); err == nil && g != "" {
-		candidates = append(candidates, g)
+		return g
 	}
 	if g := s.rigComponentGuidOf(ctx, rodGUID, 12); g != "" {
-		candidates = append(candidates, g)
-	}
-	seen := map[string]bool{}
-	for _, g := range candidates {
-		if seen[g] {
-			continue
-		}
-		seen[g] = true
-		if s.hookItemUsable(ctx, g) {
-			return g
-		}
-		s.log.Warn("忽略无效鱼钩：强度为 0 或物品缺失", "hook", shortGUID(g), "rod", shortGUID(rodGUID))
+		return g
 	}
 	return s.mountedLureHookFallback(ctx, rodGUID)
-}
-
-// hookItemUsable 判断独立鱼钩是否具有非零有效强度。
-// 客户端用钩强度作为搏鱼力度条分母，0 会导致力度条空且无法正常提杆。
-func (s *Server) hookItemUsable(ctx context.Context, hookGUID string) bool {
-	row, err := s.DB.GetItemByGUID(ctx, hookGUID)
-	if err != nil || row == nil || row.Durability <= 0 {
-		return false
-	}
-	def, err := s.itemDefForRow(ctx, row)
-	if err != nil || def == nil {
-		return false
-	}
-	strength, ok := strengthBitsFor(def, row.Durability)
-	return ok && strength > 0
 }
 
 // rigComponentGuidOf 从竿实例的钓组组件表中按品类查找 GUID。
@@ -263,69 +214,27 @@ func (s *Server) mountedLureHookFallback(ctx context.Context, rodGUID string) st
 // 活动下标缺省为 0，越界时回退到第 0 颗；没有落库钩时返回空字符串。
 func (s *Server) lureActiveHookGUID(ctx context.Context, lureGUID string) string {
 	row, err := s.DB.GetItemByGUID(ctx, lureGUID)
-	if err != nil || row == nil || row.Durability <= 0 {
+	if err != nil || row == nil {
 		return ""
 	}
-	def, err := s.itemDefForRow(ctx, row)
-	if err != nil || def == nil {
+	fields, err := FieldsFromJSON(row.FieldsJSON)
+	if err != nil || len(fields) == 0 {
 		return ""
 	}
-	attrs := defAttrs(def)
-	cfgs, _ := attrs["gpoaffnjbdo"].([]any)
-	if len(cfgs) == 0 {
-		return ""
-	}
-	fields, ferr := FieldsFromJSON(row.FieldsJSON)
-	stored := []string(nil)
 	active := 0
-	if ferr == nil && len(fields) > 0 {
-		stored = storedLureHookGUIDs(&fields[0])
-		if len(fields) > 1 && fields[1].Num != nil {
-			if v := int(u64Of(fields[1].Num)); v >= 0 {
-				active = v
-			}
+	if len(fields) > 1 && fields[1].Num != nil {
+		if v := int(u64Of(fields[1].Num)); v >= 0 {
+			active = v
 		}
 	}
-	type usableHook struct {
-		cfgIndex int
-		guid     string
+	// 落库出厂钩：f0 args(60) 每项的第一个 GUID 字段。
+	if hooks := storedLureHookGUIDs(&fields[0]); len(hooks) > 0 {
+		if active >= len(hooks) {
+			active = 0
+		}
+		return hooks[active]
 	}
-	usable := make([]usableHook, 0, len(cfgs))
-	for i, raw := range cfgs {
-		cfg, _ := raw.(map[string]any)
-		if cfg == nil {
-			continue
-		}
-		subID, _ := cfg["nhjofmmmngl"].(string)
-		if subID == "" {
-			continue
-		}
-		subDef, derr := s.DB.GetItemDefByItemID(ctx, subID)
-		if derr != nil || subDef == nil {
-			continue
-		}
-		strength, ok := strengthBitsFor(subDef, row.Durability)
-		if !ok || strength <= 0 {
-			continue
-		}
-		guid := ""
-		if i < len(stored) {
-			guid = stored[i]
-		}
-		if guid == "" {
-			guid = uuidLike(lureGUID, "gpoaffnjbdo"+itoa(i))
-		}
-		usable = append(usable, usableHook{cfgIndex: i, guid: guid})
-	}
-	if len(usable) == 0 {
-		return ""
-	}
-	for _, hook := range usable {
-		if hook.cfgIndex == active {
-			return hook.guid
-		}
-	}
-	return usable[0].guid
+	return ""
 }
 
 // storedLureHookGUIDs 按顺序提取拟饵 f0 args(60) 中每颗出厂钩的 GUID。
