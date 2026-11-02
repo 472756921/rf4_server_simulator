@@ -4,6 +4,19 @@
 
 > 本项目由玩家兴趣驱动，不以盈利为目的，不是完整复刻，也不是可直接长期运营的私服方案。
 
+## 下载即玩（推荐玩家）
+
+如果只是想游玩，**不需要安装 Go，也不需要自行编译**。请前往 [Releases](https://github.com/glance522/rf4_server_simulator/releases/latest) 下载最新的 Windows 已编译版本，解压后阅读包内的“快速开始.txt”，双击“启动服务器.cmd”或 `bin\launcher.exe` 即可运行。
+
+游玩过程中如果遇到 Bug、崩溃、协议异常或功能不符合预期，欢迎在 [Issues](https://github.com/glance522/rf4_server_simulator/issues) 中反馈。为便于定位问题，请尽量提供：
+
+- 使用的 Release 版本和客户端版本；
+- 问题发生前做了什么，以及能否稳定复现；
+- 相关日志或截图（请先移除 token、账号、路径等个人信息）；
+- 如果与特定钓法、装备或地图有关，请一并注明。
+
+我们希望通过玩家的实际反馈持续修正问题，让项目变得更好。
+
 ## 项目定位与使用边界
 
 - 本项目是个人爱好驱动的本地研究项目，主要用于学习和实践协议编解码、会话保序、状态机、数据持久化与服务端工程。
@@ -113,9 +126,9 @@ bin\gameserver.exe -config config.yaml                                   # 单�
 bin\admin.exe      -config config.yaml -init-admin admin:自定义密码       # 自定义管理员
 ```
 
-## 不熟悉命令行时如何运行
+## 从源码运行或自行编译（可选）
 
-如果你不知道如何编译、修改 hosts、安装证书，可以先安装 Go 1.27.3 或更高版本，然后让 Dsh、豆包、WorkBuddy、Codex 等智能体根据你的系统协助完成。操作前建议备份 hosts，并且不要上传或分享 `config.yaml`、`certs/`、`data/`。
+如果你下载的是源码版本，或者希望自行编译，可以先安装 Go 1.27.3 或更高版本，然后让 Dsh、豆包、WorkBuddy、Codex 等智能体根据你的系统协助完成。只玩 Release 版本时不需要安装 Go。操作前建议备份 hosts，并且不要上传或分享 `config.yaml`、`certs/`、`data/`。
 
 下面的 prompt 可以按需修改路径后直接使用：
 
