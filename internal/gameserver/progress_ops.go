@@ -215,6 +215,11 @@ var speciesFightStaticsDefault = [6]int64{280, 1600, 2700, 3477, 3000, 3312}
 // 已知鱼种沿用内置值；其余鱼种按 species_weight 的奖杯线/蓝冠线推导，
 // 避免回落到默认组（鲈鱼）导致结算界面把别的鱼的重量标准显示出来。
 func (s *Server) settleStatics(ctx context.Context, species string) [6]int64 {
+	// 调试开关：settle_scale_debug>=1 时对所有鱼种发固定假值，
+	// 用于判断客户端结算比例尺是否读取服务端 813 的 f0..f3。
+	if s.tunableF("settle_scale_debug", 0) >= 1 {
+		return [6]int64{111, 222, 333, 444, 555, 666}
+	}
 	if st, ok := speciesFightStatics[species]; ok {
 		return st
 	}
@@ -231,9 +236,16 @@ func (s *Server) settleStatics(ctx context.Context, species string) [6]int64 {
 	if f2 <= f1 {
 		f2 = f1 * 5 / 3
 	}
-	// 达标线约为奖杯线的 17.3%（按内置四个鱼种的实测比例），
-	// 上限/记录组取蓝冠线的 1.25/1.1/1.2 倍，保证显示单调递增。
-	f0 := int64(math.Round(float64(f1) * 0.173))
+	// 达标线优先用 Wiki 的 Record（绿旗）实测值；没有数据时回退到内置表，
+	// 最后才按奖杯线比例估算（仅用于缺少公开数据的鱼种）。
+	f0 := int64(0)
+	if v := fishRecordWeight(species); v > 0 {
+		f0 = v
+	} else if st, ok := speciesFightStatics[species]; ok {
+		f0 = st[0]
+	} else {
+		f0 = int64(math.Round(float64(f1) * 0.173))
+	}
 	f3 := int64(math.Round(float64(f2) * 1.25))
 	f4 := int64(math.Round(float64(f2) * 1.1))
 	f5 := int64(math.Round(float64(f2) * 1.2))
