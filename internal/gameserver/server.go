@@ -176,14 +176,16 @@ func (s *Server) openSession(c *tunnel.Conn, sid uint64, payload []byte) {
 	go s.CheckBanned(sess)
 
 	// 仅新连接发送 boot 0/1；重连沿用既有流程。
+	// 世界时钟保活必须对新连接和重连都启动：否则重连会话在约 10 秒
+	// 无下行数据后会被客户端判定断线，形成"重连-断开"循环。
 	if !op.Reconnect {
 		// 新玩家初始化（档案/starter 物品/快捷栏）
 		if err := s.EnsurePlayer(context.Background(), userid); err != nil {
 			sess.log.Warn("玩家初始化失败", "err", err)
 		}
-		sess.startKeepalive()
 		sess.Push(0, 1, proto.Args524())
 	}
+	sess.startKeepalive()
 }
 
 // byID 取会话。
