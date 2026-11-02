@@ -210,13 +210,40 @@ var speciesFightStatics = map[string][6]int64{
 
 var speciesFightStaticsDefault = [6]int64{280, 1600, 2700, 3477, 3000, 3312}
 
+// settleStatics 返回 813 结算块使用的鱼种静态组。
+//
+// 已知鱼种沿用内置值；其余鱼种按 species_weight 的奖杯线/蓝冠线推导，
+// 避免回落到默认组（鲈鱼）导致结算界面把别的鱼的重量标准显示出来。
+func (s *Server) settleStatics(ctx context.Context, species string) [6]int64 {
+	if st, ok := speciesFightStatics[species]; ok {
+		return st
+	}
+	f1, f2 := int64(1600), int64(2700)
+	if s.DB != nil {
+		_, tro, sup := s.DB.GradeLines(ctx, species)
+		if tro != nil && *tro > 0 {
+			f1 = *tro
+		}
+		if sup != nil && *sup > 0 {
+			f2 = *sup
+		}
+	}
+	if f2 <= f1 {
+		f2 = f1 * 5 / 3
+	}
+	// 达标线约为奖杯线的 17.3%（按内置四个鱼种的实测比例），
+	// 上限/记录组取蓝冠线的 1.25/1.1/1.2 倍，保证显示单调递增。
+	f0 := int64(math.Round(float64(f1) * 0.173))
+	f3 := int64(math.Round(float64(f2) * 1.25))
+	f4 := int64(math.Round(float64(f2) * 1.1))
+	f5 := int64(math.Round(float64(f2) * 1.2))
+	return [6]int64{f0, f1, f2, f3, f4, f5}
+}
+
 // buildSettle813 构造 813 搏斗统计块：f8 是 310 经验块，f9 是 25 鱼条目。
 // 310.f5 保存本次升级数，310.f6 保存加成分解，813.f4 由第五项静态值随机缩放。
 func (s *Server) buildSettle813(ctx context.Context, uid int64, f *RolledFish, r *settleXpResult) *proto.Value {
-	statics, ok := speciesFightStatics[f.Species]
-	if !ok {
-		statics = speciesFightStaticsDefault
-	}
+	statics := s.settleStatics(ctx, f.Species)
 	f4 := int64(float64(statics[4]) * (0.9 + rand.Float64()*0.2)) // 向下取整
 	// 813.f7 是该鱼银价（分），由单位重量价格计算。
 	_, silverRate := 0.4, 0.0
