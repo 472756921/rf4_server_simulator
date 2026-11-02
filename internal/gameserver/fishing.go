@@ -869,6 +869,11 @@ func (s *Server) buildFish27(f *RolledFish, hookGUID, gearGuid string) *proto.Va
 		f19v, f20v = fb[19], fb[20]
 	}
 	pull := math.Max(0.5, math.Round(w*speciesPullKOrDefault(f.Species)*10000)/10000)
+	// fight_power_scale：整体缩放鱼的拉力（同时影响 26 条张力曲线）。
+	// 调低可显著减少断线与收杆脱钩，调高则更硬核；默认 1.0 不改变原行为。
+	if k := s.tunableF("fight_power_scale", 1.0); k > 0 && k != 1.0 {
+		pull = math.Max(0.5, math.Round(pull*k*10000)/10000)
+	}
 	score := math.Round(pushScoreRate(f.Species, f.Grade)*math.Max(1, w)*100) / 100
 	quality := fishQuality(f.Species, f.Grade)
 

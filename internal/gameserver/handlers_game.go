@@ -823,6 +823,7 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 		}
 	}
 	st.mu.Lock()
+	ctx.Log.Info("14/12 鱼状态", "f0", f0)
 	if f0 == 3 {
 		st.PushSent = false
 		pending := st.Pending
