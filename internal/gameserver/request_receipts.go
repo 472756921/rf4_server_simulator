@@ -18,6 +18,14 @@ const (
 	requestReceiptStaleAfter = 2 * time.Minute
 )
 
+// receiptSkipCmds 是不落回执表的高频命令。
+//
+// 这些命令只要求服务端应答，本身没有副作用，重复执行也无害；如果照常
+// 落库，24/1 在移动时约 100 次/秒，会把 request_receipts 撑到千万行。
+var receiptSkipCmds = map[string]bool{
+	"24/1": true, // social/move 位置上报
+}
+
 type ctxReplyCapture struct {
 	mu         sync.Mutex
 	body       []byte
@@ -158,6 +166,13 @@ func (d *Dispatch) lockReceipt(key store.RequestReceiptKey) func() {
 func (s *Server) dispatchRequest(ctx *Ctx) {
 	if s.DB == nil {
 		// 无 DB 时仍统一拦截 Ctx.Reply，避免重复回包并保证无需回包的命令静默完成。
+		result := s.dispatch.executeRequest(ctx, true)
+		s.sendRequestResult(ctx, result)
+		return
+	}
+
+	if receiptSkipCmds[ctx.Key()] {
+		// 高频、无副作用命令：正常执行并应答，但不写回执表。
 		result := s.dispatch.executeRequest(ctx, true)
 		s.sendRequestResult(ctx, result)
 		return
