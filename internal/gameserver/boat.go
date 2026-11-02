@@ -16,8 +16,6 @@ package gameserver
 //   - bkmnbppciao = mbplhipcojh 时效对象 {类型 1, 起始分钟, 时长分钟}
 
 import (
-	"time"
-
 	"rf4server/internal/proto"
 	"rf4server/internal/store"
 	"rf4server/internal/wiregen"
@@ -26,13 +24,12 @@ import (
 const (
 	// boatTicketTypeID 是船票的线上 type_id（wire 类 bplepbfgpmk）。
 	boatTicketTypeID = 162
+	// boatTicketInUseFlag 是 bhhaopagglk.pmdfjipkbmn：物品"使用中"状态位。
+	boatTicketInUseFlag = 1048576
 	// boatTicketStationAttr 是船票定义里的站点枚举（0..5）。
 	boatTicketStationAttr = "algmimlfbdj"
 	// boatTicketDurationAttr 是船票定义里的租用时长（分钟）。
 	boatTicketDurationAttr = "gloegohmand"
-	// boatTicketTimedSubtype 是 pfapfdlnfbj.fhblahbelfd：限时票据标记位，
-	// 客户端据此在背包/提示中显示剩余时长。
-	boatTicketTimedSubtype = 16
 )
 
 func init() { RegisterExtra(registerBoatHandlers) }
@@ -181,7 +178,6 @@ func (s *Server) startTicketRent(ctx *Ctx, row *store.Item, def *store.ItemDef) 
 	if v := s.tunableF("boat_rent_minutes", 0); v > 0 {
 		minutes = uint64(v)
 	}
-	nowMin := uint64(time.Now().Unix() / 60)
 	db := s.DB
 
 	fields, err := FieldsFromJSON(row.FieldsJSON)
@@ -201,29 +197,35 @@ func (s *Server) startTicketRent(ctx *Ctx, row *store.Item, def *store.ItemDef) 
 			changed = true
 		}
 	}
-	// 子类型置 16（pfapfdlnfbj.fhblahbelfd）：客户端把它当作"限时/生效中的票据"，
-	// 背包与提示里的剩余时长依赖这个标记。状态位保持定义值不动。
-	if idx := fieldIdxByCS(row.WireClass, csSubtype); idx >= 0 && idx < len(fields) {
+	// 状态位置 "使用中"（bhhaopagglk.pmdfjipkbmn = 0x100000）：客户端据此
+	// 在提示里显示 kItemState_TicketInUse，而不是走到维修倒计时分支。
+	if idx := fieldIdxByCS(row.WireClass, csStateEnum); idx >= 0 && idx < len(fields) {
 		cur := u64Of(fields[idx].Num)
-		if cur&boatTicketTimedSubtype == 0 {
-			fields[idx].Num = ptrU64(cur | boatTicketTimedSubtype)
+		if cur&boatTicketInUseFlag == 0 {
+			fields[idx].Num = ptrU64(cur | boatTicketInUseFlag)
 			changed = true
 		}
 	}
+	// 时效对象（wire 类 lcjcffibmbi / dto jgjlgegndbk）必须存在，客户端靠它
+	// 显示"已激活"；但类型位必须为 0（无时效），否则会走维修倒计时分支
+	// （kItemState_Repairing → "在工作坊里 X 天后修理完"）。
+	// 判定见 knmjphiefdm.falmopiaoca：item.时效对象 != null && 类型 == 1 才进维修段。
 	if idx := fieldIdxByCS(row.WireClass, "bkmnbppciao"); idx >= 0 && idx < len(fields) {
 		if fields[idx].Val == nil || fields[idx].Val.Kind != proto.KindObj {
-			fields[idx].Val = wiregen.MustMakeObj("mbplhipcojh", map[int]*proto.Value{
-				0: proto.U32(1),              // 时效类型：有时效
-				1: proto.U32(uint32(nowMin)), // 时效起始（分钟）
-				2: proto.U32(uint32(minutes)), // 时效时长（分钟）
+			fields[idx].Val = wiregen.MustMakeObj("lcjcffibmbi", map[int]*proto.Value{
+				0: proto.StrVal(""),
+				1: proto.U32(0), // 无时效：避开维修倒计时分支
+				2: proto.U32(uint32(minutes)),
+				3: proto.U32(uint32(minutes)),
 			})
 			changed = true
 		}
 	}
-	// 票的到期时间必须覆盖整个租期，否则客户端认为租用区间超出票有效期。
+	// 票的到期时间直接对齐到"现在 + 租期"：客户端提示里的"X 后过期"
+	// 就是用这个字段算的，若只延长不缩短，短租期测试会显示成票的原始时长。
 	if idx := fieldIdxByCS(row.WireClass, csUpdated); idx >= 0 && idx < len(fields) {
 		expiry := uint64(proto.WindowsFiletimeNow()) + minutes*60*10_000_000
-		if u64Of(fields[idx].Num) < expiry {
+		if u64Of(fields[idx].Num) != expiry {
 			fields[idx].Num = ptrU64(expiry)
 			changed = true
 		}
