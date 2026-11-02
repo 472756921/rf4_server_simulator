@@ -416,21 +416,7 @@ func sortedRigCompItems(comps map[int64]rigComp, rigType int64) []*proto.Value {
 // f0 是 rig_* 资源名，f1 是类型，f2 是 args(81) 组件列表；即使为空也必须保留
 // args 容器，否则客户端无法解析。f4 是钓棚深度。
 func buildRig153(name string, rigType int64, comps map[int64]rigComp, depth int64) *proto.Value {
-	if name == "" {
-		name = "rig_FloatSimple"
-	}
-	return wiregen.MustMakeObj("gbbhdkefnkn", map[int]*proto.Value{
-		0: proto.StrVal(name),
-		1: proto.U32(uint32(rigType)),
-		2: proto.Args(proto.S("81"), sortedRigCompItems(comps, rigType)...),
-		3: proto.U32(0),
-		4: proto.U32(uint32(depth)),
-		5: proto.U32(0),
-		6: proto.U32(15),
-		7: proto.U32(15),
-		8: proto.U32(0),
-		9: proto.U32(0),
-	})
+	return buildRig153WithClip(name, rigType, comps, depth, 0)
 }
 
 // ---- 字段写入辅助 ----
@@ -1237,7 +1223,7 @@ func (s *Server) rigItemMutate(ctx context.Context, rodGUID string, slot *int64,
 	}
 
 	fields[idx].Op = "VAL"
-	fields[idx].Val = buildRig153(name, curType, comps, curDepth)
+	fields[idx].Val = buildRig153WithClip(name, curType, comps, curDepth, rigClipOf(stored))
 	s.saveItemFields(ctx, row, fields)
 	_ = s.reconcileRigProjection(ctx, rodGUID)
 	if curType != originalType {
@@ -1292,7 +1278,7 @@ func (s *Server) rigItemDeleteComponentAt(ctx context.Context, rodGUID string, s
 	}
 	depth := rigDepthOf(stored, defaultDepthFor(name, curType))
 	fields[idx].Op = "VAL"
-	fields[idx].Val = buildRig153(name, curType, comps, depth)
+	fields[idx].Val = buildRig153WithClip(name, curType, comps, depth, rigClipOf(stored))
 	s.saveItemFields(ctx, row, fields)
 	_ = s.reconcileRigProjection(ctx, rodGUID)
 	return true
@@ -1728,7 +1714,11 @@ func (s *Server) liveRig153(ctx context.Context, row *store.Item, storedF5 *prot
 	if name == rigNameLure || (curType != 0 && curType == rigTypeLure) {
 		depth = 0 // 路亚钓组没有钓棚深度
 	}
-	return buildRig153(name, curType, comps, depth)
+	clipM := rigClipOf(storedF5)
+	if saved, ok := s.savedReelClipM(ctx, row.GUID); ok {
+		clipM = saved
+	}
+	return buildRig153WithClip(name, curType, comps, depth, clipM)
 }
 
 // buildRigObject 构造当前钓组的 157 对象。
@@ -1828,7 +1818,11 @@ func (s *Server) rigItem157Fallback(ctx context.Context, uid int64, rigGUID stri
 	if g, gerr := s.DB.GetItemGUIDByRigSlot(ctx, rigGUID, 11); gerr == nil {
 		lineGUID = g
 	}
-	f5 := buildRig153(name, rigType, comps, defaultDepthFor(name, rigType))
+	clipM := int64(0)
+	if saved, ok := s.savedReelClipM(ctx, rigGUID); ok {
+		clipM = saved
+	}
+	f5 := buildRig153WithClip(name, rigType, comps, defaultDepthFor(name, rigType), clipM)
 	vals := map[int]*proto.Value{
 		3:  proto.Guid(lineGUID),
 		5:  f5,
