@@ -893,6 +893,12 @@ func (s *Server) rigSetComponent(ctx context.Context, uid int64, parentGUID stri
 	}
 
 	itemCat, hasCat := s.itemCategoryOf(ctx, it)
+	if s.itemBrokenForMount(ctx, it) {
+		s.log.Warn("装配被拒：物品已损坏或鱼线长度耗尽", "item", shortGUID(itemGUID),
+			"durability", it.Durability, "category", itemCat)
+		res.Rejected = true
+		return res
+	}
 	if slot <= 0 && hasCat {
 		slot = itemCat // 槽位 = 物品品类（17/2 请求无槽位，见模块头注）
 	}
@@ -2004,6 +2010,16 @@ func hRodTake(ctx *Ctx) ([]byte, bool) {
 
 	if gear == "" {
 		// 没有可取竿时返回全零 GUID。
+		if body := castReady158(ctx, "", depthCM); body != nil {
+			return body, true
+		}
+		return nil, false
+	}
+	if row, err := srv.DB.GetItemByGUID(ctx.Sess.pushCtx(), gear); err != nil || row == nil || row.Durability <= 0 {
+		st.mu.Lock()
+		st.GearGuid = ""
+		st.mu.Unlock()
+		ctx.Log.Info("取竿被拒：鱼竿已损坏", "rod", shortGUID(gear))
 		if body := castReady158(ctx, "", depthCM); body != nil {
 			return body, true
 		}

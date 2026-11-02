@@ -110,38 +110,52 @@ func (s *Server) wearRigForCatchPersisted(ctx context.Context, rigGUID string) {
 	if rigGUID == "" || s.DB == nil {
 		return
 	}
-	comps, err := s.DB.ListRigComponents(ctx, rigGUID)
-	if err != nil {
-		return
-	}
-	seen := map[string]bool{}
-	for _, c := range comps {
-		if c.GUID == "" || seen[c.GUID] {
-			continue
+	applyWear := func(row *store.Item, key string, amount float64, slot, ordinal int64) {
+		if row == nil || amount <= 0 {
+			return
 		}
-		seen[c.GUID] = true
-		key, ok := persistedSlotWearKey[c.Slot]
-		if !ok {
-			key = "default"
-		}
-		amount := wearPerCatch[key]
-		if amount <= 0 {
-			continue
-		}
-		row, err := s.DB.GetItemByGUID(ctx, c.GUID)
-		if err != nil || row == nil {
-			continue
-		}
-		newD := math.Max(0, row.Durability-amount)
-		if math.Abs(newD-row.Durability) < 1e-9 {
-			continue
+		before := row.Durability
+		newD := math.Max(0, before-amount)
+		if math.Abs(newD-before) < 1e-9 {
+			return
 		}
 		if err := s.persistItemDurability(ctx, row, newD); err != nil {
 			s.log.Warn("钓获磨损写库失败", "guid", shortGUID(row.GUID), "err", err)
-			continue
+			return
 		}
-		s.log.Info("钓获磨损", "guid", shortGUID(row.GUID), "slot", c.Slot,
-			"ordinal", c.Ordinal, "类别", key, "耐久", fmt.Sprintf("%.4f->%.4f", row.Durability, newD))
+		detail := damageDetailJSON(map[string]any{"slot": slot, "ordinal": ordinal, "category": key})
+		if err := s.DB.AddItemDamageLog(ctx, store.ItemDamageLog{
+			UID: row.UID, ItemGUID: row.GUID, ItemID: row.ItemID, Event: damageEventWear,
+			BeforeDurability: ptrFloat64(before), AfterDurability: ptrFloat64(newD), DetailJSON: detail,
+		}); err != nil {
+			s.log.Warn("钓获磨损历史写库失败", "guid", shortGUID(row.GUID), "err", err)
+		}
+		s.log.Info("钓获磨损", "guid", shortGUID(row.GUID), "slot", slot,
+			"ordinal", ordinal, "类别", key, "耐久", fmt.Sprintf("%.4f->%.4f", before, newD))
+	}
+
+	comps, err := s.DB.ListRigComponents(ctx, rigGUID)
+	if err == nil {
+		seen := map[string]bool{}
+		for _, c := range comps {
+			if c.GUID == "" || seen[c.GUID] {
+				continue
+			}
+			seen[c.GUID] = true
+			key, ok := persistedSlotWearKey[c.Slot]
+			if !ok {
+				key = "default"
+			}
+			row, rerr := s.DB.GetItemByGUID(ctx, c.GUID)
+			if rerr != nil || row == nil {
+				continue
+			}
+			applyWear(row, key, wearPerCatch[key], c.Slot, c.Ordinal)
+		}
+	}
+	// 竿本体不在 rig_component 中，单独施加结构磨损。
+	if rod, rerr := s.DB.GetItemByGUID(ctx, rigGUID); rerr == nil && rod != nil {
+		applyWear(rod, "rod", wearPerCatch["rod"], gearCatRod, 0)
 	}
 }
 

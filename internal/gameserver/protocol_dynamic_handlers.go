@@ -97,28 +97,77 @@ func hDynamicRigSnapshot(ctx *Ctx) ([]byte, bool) {
 	return body, true
 }
 
-// hDynamicRodBreak 17/9 rod/break：回 11028 断竿结果。
-// 请求或钓鱼状态提供竿 guid；没有可用值时使用全零 guid，保持线型合法。
+// hDynamicRodBreak 17/9 rod/break：按断件 GUID 持久化断线/断竿并回 11028。
+// 请求参数顺序为 [竿 GUID, 断件 GUID, 物理模型]；没有断件时回退到当前竿。
 func hDynamicRodBreak(ctx *Ctx) ([]byte, bool) {
-	gear := ""
+	srv := ctx.Sess.Srv
+	var guids []string
 	for _, g := range deepGUIDs(ctx.Tree) {
 		if n := normalizeDynamicGUID(g); n != "" && n != zeroGUID {
-			gear = n
-			break
+			guids = append(guids, n)
 		}
 	}
-	if gear == "" {
-		st := ctx.Sess.Srv.stateFor(ctx.Sess.Userid)
+	rodGUID := ""
+	if len(guids) > 0 {
+		rodGUID = guids[0]
+	}
+	brokenGUID := ""
+	if len(guids) > 1 {
+		brokenGUID = guids[1]
+	}
+	st := srv.stateFor(ctx.Sess.Userid)
+	if rodGUID == "" {
 		st.mu.Lock()
-		gear = normalizeDynamicGUID(st.GearGuid)
+		rodGUID = normalizeDynamicGUID(st.GearGuid)
 		st.mu.Unlock()
 	}
-	if gear == "" {
-		gear = zeroGUID
+	if rodGUID == "" {
+		rodGUID = zeroGUID
+	}
+
+	if srv.DB != nil && rodGUID != zeroGUID {
+		outcome, err := srv.breakLineOrRod(ctx.Sess.pushCtx(), ctx.Sess.Userid, rodGUID, brokenGUID)
+		if err == nil {
+			st.mu.Lock()
+			if st.biteTimer != nil {
+				st.biteTimer.Stop()
+			}
+			st.Pending = nil
+			st.CastActive = false
+			st.Hooked = false
+			st.Resolved = true
+			if !outcome.LineBroken {
+				st.GearGuid = ""
+			}
+			st.mu.Unlock()
+			if outcome.LineBroken {
+				srv.bumpFishingCounter(ctx.Sess.Userid, "line_breaks")
+			} else {
+				srv.bumpFishingCounter(ctx.Sess.Userid, "rod_breaks")
+			}
+			obj, berr := buildGearBreakResult(outcome)
+			if berr != nil {
+				return nil, false
+			}
+			body, berr := proto.EncodeValue(obj, ctx.Sess.Table())
+			if berr != nil {
+				return nil, false
+			}
+			ctx.Log.Info("17/9 渔具断裂", "rod", shortGUID(rodGUID), "broken", shortGUID(outcome.BrokenGUID),
+				"line", outcome.LineBroken, "removed", len(outcome.RemovedGUIDs))
+			return body, true
+		}
+		ctx.Log.Warn("17/9 断件写库失败，回退兼容响应", "rod", shortGUID(rodGUID), "err", err)
+	}
+
+	// 数据异常时保持旧协议兼容，避免客户端等待超时。
+	fallbackGUID := brokenGUID
+	if fallbackGUID == "" {
+		fallbackGUID = rodGUID
 	}
 	obj, err := wiregen.MakeObj("ikmdmfoojfg", map[int]*proto.Value{
 		0: proto.U32(0),
-		1: proto.Guid(gear),
+		1: proto.Guid(fallbackGUID),
 		2: proto.Args(proto.S("61")),
 		3: proto.Null(),
 		4: proto.Null(),

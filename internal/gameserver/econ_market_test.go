@@ -554,6 +554,23 @@ func TestRepairFlow(t *testing.T) {
 	if row == nil || row.Durability != 1.0 {
 		t.Fatalf("修理后耐久应 1.0: %+v", row)
 	}
+	// 修理历史必须落库，且记录修复前后耐久。
+	damageLogs, err := db.ListItemDamageLogs(ctx, 1000001, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundRepairLog := false
+	for _, entry := range damageLogs {
+		if entry.ItemGUID == guid && entry.Event == damageEventRepair &&
+			entry.BeforeDurability != nil && *entry.BeforeDurability == 0.5 &&
+			entry.AfterDurability != nil && *entry.AfterDurability == 1.0 {
+			foundRepairLog = true
+			break
+		}
+	}
+	if !foundRepairLog {
+		t.Fatalf("缺少修理历史: %+v", damageLogs)
+	}
 	// 按客户端报价扣费
 	p1, _ := db.EnsureProfile(ctx, 1000001)
 	if p1.Silver != silver0-120 {

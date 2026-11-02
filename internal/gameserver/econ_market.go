@@ -909,8 +909,19 @@ func hWorkshopRepair(useGold bool) Handler {
 			_ = srv.DB.AddTxn(cctx, ctx.Sess.Userid, "repair", "", guid, -cost, 0, "silver")
 		}
 		// 恢复耐久，保留工艺质量。
-		_ = srv.DB.SetItemDurability(cctx, guid, 1.0)
+		beforeDurability := row.Durability
+		if err := srv.DB.SetItemDurability(cctx, guid, 1.0); err != nil {
+			ctx.Log.Warn("修理耐久写库失败", "guid", shortGUID(guid), "err", err)
+			return nil, false
+		}
 		row.Durability = 1.0
+		if err := srv.DB.AddItemDamageLog(cctx, store.ItemDamageLog{
+			UID: ctx.Sess.Userid, ItemGUID: guid, ItemID: row.ItemID, Event: damageEventRepair,
+			BeforeDurability: ptrFloat64(beforeDurability), AfterDurability: ptrFloat64(1.0),
+			DetailJSON: damageDetailJSON(map[string]any{"store": storeID, "cost": cost, "gold": useGold}),
+		}); err != nil {
+			ctx.Log.Warn("修理历史写库失败", "guid", shortGUID(guid), "err", err)
+		}
 		tree, terr := srv.ItemToTree(cctx, row)
 		if terr != nil {
 			return nil, false
@@ -1006,6 +1017,7 @@ func deepInts(v *proto.Value) []int64 {
 
 // wearPerCatch 定义每次成功钓获对各组件造成的耐久下降量。
 var wearPerCatch = map[string]float64{
+	"rod":     0.0002, // 竿本体：结构件，磨损慢于线/钩
 	"line":    0.0015, // 鱼线：承力件，磨损最快
 	"hook":    0.0012, // 鱼钩
 	"bait":    0.0,    // 鱼饵是消耗品，由数量扣减而非耐久

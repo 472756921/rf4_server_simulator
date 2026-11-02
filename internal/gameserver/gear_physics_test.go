@@ -166,6 +166,16 @@ func TestRigGearIDsReadsCurrentRodFieldsAndComponents(t *testing.T) {
 	if math.Abs(capKg-wantCap) > 1e-4 || weakest != "reel" {
 		t.Fatalf("当前钓组 cap=%f weakest=%q，期望 cap=%f weakest=reel", capKg, weakest, wantCap)
 	}
+
+	// 实例耐久必须参与服务端最弱环计算：半耐久鱼线 10.5kg -> 5.25kg。
+	if err := db.SetItemDurability(ctx, lineGUID, 0.5); err != nil {
+		t.Fatal(err)
+	}
+	capKg, _, weakest = srv.gearWeightCapForRig(ctx, uid, rodGUID)
+	wantCap = 5.25 * (1.0 / 0.35) / 0.575
+	if math.Abs(capKg-wantCap) > 1e-4 || weakest != "line" {
+		t.Fatalf("磨损后 cap=%f weakest=%q，期望 cap=%f weakest=line", capKg, weakest, wantCap)
+	}
 }
 
 func NewServerForGearTest(t *testing.T, db *store.DB) *Server {

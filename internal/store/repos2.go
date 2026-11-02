@@ -266,6 +266,14 @@ func (d *DB) UpdateItemFields(ctx context.Context, guid string, fieldsJSON strin
 	return err
 }
 
+// UpdateItemFieldsTx 在事务内更新字段快照、数量、耐久、工艺和装配。
+func (d *DB) UpdateItemFieldsTx(ctx context.Context, tx *sql.Tx, guid string, fieldsJSON string, qty int64, durability, workmanship float64, rigGUID string) error {
+	_, err := tx.ExecContext(ctx, `
+		UPDATE item SET fields_json=?, qty=?, durability=?, workmanship=?, rig_guid=?
+		WHERE guid=?`, fieldsJSON, qty, durability, workmanship, nullIfEmpty(rigGUID), guid)
+	return err
+}
+
 // DeleteItems 删除物品。
 func (d *DB) DeleteItems(ctx context.Context, guid []string) error {
 	if len(guid) == 0 {
@@ -356,6 +364,12 @@ func (d *DB) GetItemDefByItemID(ctx context.Context, itemID string) (*ItemDef, e
 // GetItemByGUID 取单个物品行。
 func (d *DB) GetItemByGUID(ctx context.Context, guid string) (*Item, error) {
 	row := d.SQL.QueryRowContext(ctx, `SELECT `+itemCols+` FROM item WHERE guid=?`, guid)
+	return scanItem(row)
+}
+
+// GetItemByGUIDTx 在事务内读取单个物品行。
+func (d *DB) GetItemByGUIDTx(ctx context.Context, tx *sql.Tx, guid string) (*Item, error) {
+	row := tx.QueryRowContext(ctx, `SELECT `+itemCols+` FROM item WHERE guid=?`, guid)
 	return scanItem(row)
 }
 
