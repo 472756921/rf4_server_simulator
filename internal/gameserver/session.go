@@ -18,6 +18,8 @@ import (
 // 所有出站信封经 sendMu 串行化：分配推送 call_id、构造信封和发送在同一锁内完成，
 // 保证客户端看到的 call_id 严格递增，并与网关的隧道路由顺序一致。
 type Session struct {
+	// keepaliveTicks 保活循环计数，用于低频任务（船票剩余时间推送）。
+	keepaliveTicks int64
 	ID     uint64 // 网关分配的会话号
 	Token  string
 	Userid int64
@@ -200,6 +202,14 @@ func (s *Session) startKeepalive() {
 					return
 				}
 				pushKeepalive(s)
+				// 每 6 拍（约 30 秒）刷新一次已租用船票的剩余分钟，
+				// 让客户端的到期提示随时间递减（客户端自身不会重算）。
+				// 每 6 拍（约 30 秒）清理一次已到期的租用船票。
+				// 注意：只做"到期移除"，不反复重建物品，避免客户端 UI 卡死。
+				s.keepaliveTicks++
+				if s.keepaliveTicks%6 == 0 {
+					s.expireRentalTickets()
+				}
 				timer.Reset(interval)
 			}
 		}

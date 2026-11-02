@@ -16,6 +16,8 @@ package gameserver
 //   - bkmnbppciao = mbplhipcojh 时效对象 {类型 1, 起始分钟, 时长分钟}
 
 import (
+	"time"
+
 	"rf4server/internal/proto"
 	"rf4server/internal/store"
 	"rf4server/internal/wiregen"
@@ -215,7 +217,9 @@ func (s *Server) startTicketRent(ctx *Ctx, row *store.Item, def *store.ItemDef) 
 			fields[idx].Val = wiregen.MustMakeObj("lcjcffibmbi", map[int]*proto.Value{
 				0: proto.StrVal(""),
 				1: proto.U32(0), // 无时效：避开维修倒计时分支
-				2: proto.U32(uint32(minutes)),
+				// 起始必须是"当前分钟数"（unix 分钟），不能填时长：
+				// 客户端算剩余 = 起始 + 时长 - 当前，填 1440 会算成常量。
+				2: proto.U32(uint32(time.Now().Unix() / 60)),
 				3: proto.U32(uint32(minutes)),
 			})
 			changed = true
@@ -298,4 +302,107 @@ func (s *Server) activeRentalTicket(ctx *Ctx, station uint64) *proto.Value {
 		}
 	}
 	return nil
+}
+
+// pushTicketRemaining 把已租用船票的"剩余分钟"写进票的数值字段并推送。
+//
+// 客户端提示里的到期倒计时直接显示该字段（运行时验证：pioghgjeelp 的返回值
+// 恒等于它，且不随时间变化），所以只能由服务端周期性下发新的剩余值，
+// 提示才会随时间递减。
+func (s *Session) pushTicketRemaining() {
+	if s.Srv == nil || s.Srv.DB == nil {
+		return
+	}
+	cctx := s.pushCtx()
+	guids, err := s.Srv.DB.ItemGUIDsByContainers(cctx, s.Userid, []string{"backpack"})
+	if err != nil {
+		return
+	}
+	nowMin := uint64(time.Now().Unix() / 60)
+	for _, g := range guids {
+		row, rerr := s.Srv.DB.GetItemByGUID(cctx, g)
+		if rerr != nil || row == nil || row.TypeID != boatTicketTypeID {
+			continue
+		}
+		fields, ferr := FieldsFromJSON(row.FieldsJSON)
+		if ferr != nil {
+			continue
+		}
+		ki := fieldIdxByCS(row.WireClass, "knpoijanngk")
+		if ki < 0 || ki >= len(fields) || u64Of(fields[ki].Num) != 1 {
+			continue
+		}
+		ri := fieldIdxByCS(row.WireClass, "bkmnbppciao")
+		if ri < 0 || ri >= len(fields) || fields[ri].Val == nil || fields[ri].Val.Kind != proto.KindObj {
+			continue
+		}
+		rent := fields[ri].Val
+		if len(rent.Fields) < 4 {
+			continue
+		}
+		start := u64Of(rent.Fields[2].Num)
+		dur := u64Of(rent.Fields[3].Num)
+		var remain uint64
+		if start+dur > nowMin {
+			remain = start + dur - nowMin
+		}
+		tree, terr := s.Srv.ItemToTree(cctx, row)
+		if terr != nil {
+			continue
+		}
+		if vi := fieldIdxByCS(row.WireClass, "oieepfcgjgn"); vi >= 0 && vi < len(tree.Fields) {
+			tree.Fields[vi].Num = ptrU64(remain)
+		}
+		// 先"移除"再"添加"，强制客户端替换物品对象并重建提示。
+		s.Push(4, 21, proto.Args524(proto.GuidArr([]string{g})))
+		s.Push(4, 22, proto.Args(proto.S("61"), tree))
+		s.log.Info("船票剩余分钟推送", "guid", guidShort(g), "remain", remain, "dur", dur)
+	}
+}
+
+// expireRentalTickets 清理已过期的租用票：直接从背包移除并推送 4/21。
+// 票是"用一次就消耗"的道具，租期结束后不应留在背包里。
+func (s *Session) expireRentalTickets() {
+	if s.Srv == nil || s.Srv.DB == nil {
+		return
+	}
+	cctx := s.pushCtx()
+	guids, err := s.Srv.DB.ItemGUIDsByContainers(cctx, s.Userid, []string{"backpack"})
+	if err != nil {
+		return
+	}
+	nowMin := uint64(time.Now().Unix() / 60)
+	for _, g := range guids {
+		row, rerr := s.Srv.DB.GetItemByGUID(cctx, g)
+		if rerr != nil || row == nil || row.TypeID != boatTicketTypeID {
+			continue
+		}
+		fields, ferr := FieldsFromJSON(row.FieldsJSON)
+		if ferr != nil {
+			continue
+		}
+		ki := fieldIdxByCS(row.WireClass, "knpoijanngk")
+		if ki < 0 || ki >= len(fields) || u64Of(fields[ki].Num) != 1 {
+			continue
+		}
+		ri := fieldIdxByCS(row.WireClass, "bkmnbppciao")
+		if ri < 0 || ri >= len(fields) || fields[ri].Val == nil || fields[ri].Val.Kind != proto.KindObj {
+			continue
+		}
+		rent := fields[ri].Val
+		if len(rent.Fields) < 4 {
+			continue
+		}
+		start := u64Of(rent.Fields[2].Num)
+		dur := u64Of(rent.Fields[3].Num)
+		if start+dur > nowMin {
+			continue
+		}
+		if derr := s.Srv.DB.DeleteItems(cctx, []string{g}); derr != nil {
+			s.log.Error("过期船票删除失败", "guid", guidShort(g), "err", derr)
+			continue
+		}
+		s.Push(4, 21, proto.Args524(proto.GuidArr([]string{g})))
+		s.log.Info("船票到期已移除", "guid", guidShort(g), "dur", dur)
+	}
 }
