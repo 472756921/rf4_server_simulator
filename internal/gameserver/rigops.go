@@ -1926,8 +1926,17 @@ func hHanditemPrepare(ctx *Ctx) ([]byte, bool) {
 	}
 	cur := st.GearGuid
 	depthCM := st.DepthCM
+	rigType := st.RigType
 	st.mu.Unlock()
-	body := castReady158(ctx, cur, depthCM)
+	if rigType == 0 && cur != "" {
+		if row, err := srv.DB.GetItemByGUID(ctx.Sess.pushCtx(), cur); err == nil && row != nil {
+			rigType = srv.rigTypeOfItem(ctx.Sess.pushCtx(), row)
+			st.mu.Lock()
+			st.RigType = rigType
+			st.mu.Unlock()
+		}
+	}
+	body := castReady158(ctx, cur, depthCM, rigType)
 	if body == nil {
 		return nil, false
 	}
@@ -1945,8 +1954,17 @@ func hHanditemSetDist(ctx *Ctx) ([]byte, bool) {
 	st.mu.Lock()
 	gear := st.GearGuid
 	depthCM := st.DepthCM
+	rigType := st.RigType
 	st.mu.Unlock()
-	body := castReady158(ctx, gear, depthCM)
+	if rigType == 0 && gear != "" {
+		if row, err := srv.DB.GetItemByGUID(ctx.Sess.pushCtx(), gear); err == nil && row != nil {
+			rigType = srv.rigTypeOfItem(ctx.Sess.pushCtx(), row)
+			st.mu.Lock()
+			st.RigType = rigType
+			st.mu.Unlock()
+		}
+	}
+	body := castReady158(ctx, gear, depthCM, rigType)
 	if body == nil {
 		return nil, false
 	}
@@ -1956,7 +1974,7 @@ func hHanditemSetDist(ctx *Ctx) ([]byte, bool) {
 // castReady158 构造 158 手持上下文，供 14/1 和 17/7 共用。
 // f0 是钓组 GUID，f1 是投掷距离，f2 是水深，f3 是当前线末端钩的 GUID。
 // f3 为空或错误时客户端会认为装备未组装，后续 14/1 不会发出。
-func castReady158(ctx *Ctx, gear string, depthCM int64) []byte {
+func castReady158(ctx *Ctx, gear string, depthCM int64, rigType int64) []byte {
 	depthBits := castDepthBits
 	if depthCM > 0 {
 		depthBits = proto.F32Bits(float32(depthCM) / 100.0)
@@ -1967,7 +1985,7 @@ func castReady158(ctx *Ctx, gear string, depthCM int64) []byte {
 	}
 	obj := wiregen.MustMakeObj("lfnjkiffphn", map[int]*proto.Value{
 		0: proto.Guid(guidOrZero(gear)),
-		1: proto.U32(castDistBits),
+		1: proto.U32(castBaseDistanceBits(rigType)),
 		2: proto.U32(depthBits),
 		3: proto.Guid(guidOrZero(hookGUID)),
 	})
@@ -2006,11 +2024,20 @@ func hRodTake(ctx *Ctx) ([]byte, bool) {
 	}
 	gear := st.GearGuid
 	depthCM := st.DepthCM
+	rigType := st.RigType
 	st.mu.Unlock()
+	if rigType == 0 && gear != "" {
+		if row, err := srv.DB.GetItemByGUID(ctx.Sess.pushCtx(), gear); err == nil && row != nil {
+			rigType = srv.rigTypeOfItem(ctx.Sess.pushCtx(), row)
+			st.mu.Lock()
+			st.RigType = rigType
+			st.mu.Unlock()
+		}
+	}
 
 	if gear == "" {
 		// 没有可取竿时返回全零 GUID。
-		if body := castReady158(ctx, "", depthCM); body != nil {
+		if body := castReady158(ctx, "", depthCM, rigType); body != nil {
 			return body, true
 		}
 		return nil, false
@@ -2020,7 +2047,7 @@ func hRodTake(ctx *Ctx) ([]byte, bool) {
 		st.GearGuid = ""
 		st.mu.Unlock()
 		ctx.Log.Info("取竿被拒：鱼竿已损坏", "rod", shortGUID(gear))
-		if body := castReady158(ctx, "", depthCM); body != nil {
+		if body := castReady158(ctx, "", depthCM, 0); body != nil {
 			return body, true
 		}
 		return nil, false
@@ -2029,7 +2056,7 @@ func hRodTake(ctx *Ctx) ([]byte, bool) {
 	if srv.ensureRig(ctx.Sess.pushCtx(), ctx.Sess.Userid, gear) {
 		ctx.Sess.Push4_22Full()
 	}
-	body := castReady158(ctx, gear, depthCM)
+	body := castReady158(ctx, gear, depthCM, rigType)
 	if body == nil {
 		return nil, false
 	}

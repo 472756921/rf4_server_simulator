@@ -596,11 +596,18 @@ func hCastPrepare(ctx *Ctx) ([]byte, bool) {
 	st.mu.Lock()
 	st.GearGuid = gear
 	depthCM := st.DepthCM
+	rigType := st.RigType
 	st.mu.Unlock()
 	// 收敛钓组数据：补齐 f5、rig 行、组件和尖梢。
 	// 尖梢有更新时推送 4/22 全量竿树，因为客户端抛竿前会校验实例 f8。
 	if srv.ensureRig(ctx.Sess.pushCtx(), ctx.Sess.Userid, gear) {
 		ctx.Sess.Push4_22Full()
+	}
+	if row, err := srv.DB.GetItemByGUID(ctx.Sess.pushCtx(), gear); err == nil && row != nil {
+		rigType = srv.rigTypeOfItem(ctx.Sess.pushCtx(), row)
+		st.mu.Lock()
+		st.RigType = rigType
+		st.mu.Unlock()
 	}
 
 	// f2 传递钓深：17/12 的厘米值转换为米写入 158.f2；
@@ -613,7 +620,7 @@ func hCastPrepare(ctx *Ctx) ([]byte, bool) {
 	hookGUID := srv.mountedHookGuid(ctx.Sess.pushCtx(), gear)
 	obj := wiregen.MustMakeObj("lfnjkiffphn", map[int]*proto.Value{
 		0: proto.Guid(gear),
-		1: proto.U32(castDistBits),
+		1: proto.U32(castBaseDistanceBits(rigType)),
 		2: proto.U32(depthBits),
 		3: proto.Guid(hookGUID),
 	})
