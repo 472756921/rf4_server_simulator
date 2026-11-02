@@ -38,10 +38,14 @@ const (
 // rigGearIDs 返回当前钓组用于物理判定的 systemID。
 // 空字符串表示数据缺失，该部件不参与最弱环计算。
 type rigGearIDs struct {
-	Rod    string
-	Reel   string
-	Line   string
-	Leader string
+	Rod              string
+	Reel             string
+	Line             string
+	Leader           string
+	RodDurability    float64
+	ReelDurability   float64
+	LineDurability   float64
+	LeaderDurability float64
 }
 
 // gearPhysicsSpec 是 item_def 解码后的物理量快照（kg/mm/m/比例）。
@@ -289,12 +293,24 @@ func (s *Server) loadGearSpec(ctx context.Context, ids rigGearIDs) gearPhysicsSp
 		}
 		return def
 	}
-	spec.RodPowerKg = rodPowerKg(load(ids.Rod))
-	spec.ReelDragKg = reelDragMaxKg(load(ids.Reel))
+	applyDurability := func(v, durability float64) float64 {
+		if v <= 0 {
+			return 0
+		}
+		if durability < 0 {
+			durability = 0
+		}
+		if durability > 1 {
+			durability = 1
+		}
+		return v * durability
+	}
+	spec.RodPowerKg = applyDurability(rodPowerKg(load(ids.Rod)), ids.RodDurability)
+	spec.ReelDragKg = applyDurability(reelDragMaxKg(load(ids.Reel)), ids.ReelDurability)
 	lineDef := load(ids.Line)
-	spec.LineStrengthKg = lineStrengthKg(lineDef)
+	spec.LineStrengthKg = applyDurability(lineStrengthKg(lineDef), ids.LineDurability)
 	spec.LineStretch = lineStretch(lineDef)
-	spec.LeaderStrengthKg = leaderStrengthKg(load(ids.Leader))
+	spec.LeaderStrengthKg = applyDurability(leaderStrengthKg(load(ids.Leader)), ids.LeaderDurability)
 	return spec
 }
 
@@ -322,6 +338,7 @@ func (s *Server) rigGearIDs(ctx context.Context, uid int64, rodGUID string) rigG
 		return out
 	}
 	out.Rod = s.itemSystemID(ctx, row)
+	out.RodDurability = row.Durability
 
 	compGUIDs := map[int64]string{}
 	if comps, err := s.DB.ListRigComponents(ctx, row.GUID); err == nil {
@@ -351,19 +368,19 @@ func (s *Server) rigGearIDs(ctx context.Context, uid int64, rodGUID string) rigG
 		}
 	}
 
-	out.Reel = s.itemSystemIDByGUID(ctx, compGUIDs[gearCatReel])
-	out.Line = s.itemSystemIDByGUID(ctx, compGUIDs[gearCatLine])
-	out.Leader = s.itemSystemIDByGUID(ctx, compGUIDs[gearCatLeaderWire])
+	out.Reel, out.ReelDurability = s.itemSystemIDDurabilityByGUID(ctx, compGUIDs[gearCatReel])
+	out.Line, out.LineDurability = s.itemSystemIDDurabilityByGUID(ctx, compGUIDs[gearCatLine])
+	out.Leader, out.LeaderDurability = s.itemSystemIDDurabilityByGUID(ctx, compGUIDs[gearCatLeaderWire])
 	if out.Leader == "" {
-		out.Leader = s.itemSystemIDByGUID(ctx, compGUIDs[gearCatLeader])
+		out.Leader, out.LeaderDurability = s.itemSystemIDDurabilityByGUID(ctx, compGUIDs[gearCatLeader])
 	}
 
 	// 背包兜底只补竿、轮和线，不猜测前导。
 	if out.Reel == "" {
-		out.Reel = s.firstOwnedItemSystemID(ctx, uid, gearCatReel)
+		out.Reel, out.ReelDurability = s.firstOwnedItemSystemIDDurability(ctx, uid, gearCatReel)
 	}
 	if out.Line == "" {
-		out.Line = s.firstOwnedItemSystemID(ctx, uid, gearCatLine)
+		out.Line, out.LineDurability = s.firstOwnedItemSystemIDDurability(ctx, uid, gearCatLine)
 	}
 	return out
 }
@@ -415,6 +432,17 @@ func (s *Server) itemSystemIDByGUID(ctx context.Context, guid string) string {
 	return s.itemSystemID(ctx, row)
 }
 
+func (s *Server) itemSystemIDDurabilityByGUID(ctx context.Context, guid string) (string, float64) {
+	if s == nil || s.DB == nil || guid == "" {
+		return "", 1
+	}
+	row, err := s.DB.GetItemByGUID(ctx, guid)
+	if err != nil || row == nil {
+		return "", 1
+	}
+	return s.itemSystemID(ctx, row), row.Durability
+}
+
 func (s *Server) firstOwnedItemSystemID(ctx context.Context, uid, category int64) string {
 	guids, err := s.DB.ItemGUIDsByContainers(ctx, uid, []string{"backpack", "rig"})
 	if err != nil {
@@ -431,6 +459,24 @@ func (s *Server) firstOwnedItemSystemID(ctx context.Context, uid, category int64
 		}
 	}
 	return ""
+}
+
+func (s *Server) firstOwnedItemSystemIDDurability(ctx context.Context, uid, category int64) (string, float64) {
+	guids, err := s.DB.ItemGUIDsByContainers(ctx, uid, []string{"backpack", "rig"})
+	if err != nil {
+		return "", 1
+	}
+	for _, g := range guids {
+		row, err := s.DB.GetItemByGUID(ctx, g)
+		if err != nil || row == nil {
+			continue
+		}
+		def, err := s.itemDefForRow(ctx, row)
+		if err == nil && def != nil && def.Category == category {
+			return s.itemSystemID(ctx, row), row.Durability
+		}
+	}
+	return "", 1
 }
 
 func (s *Server) itemDefForRow(ctx context.Context, row *store.Item) (*store.ItemDef, error) {

@@ -166,6 +166,18 @@ func (d *DB) DeleteItemCascade(ctx context.Context, guid string) error {
 	return err
 }
 
+// DeleteItemCascadeTx 在事务内删除物品及其槽位、钓组关联行。
+func (d *DB) DeleteItemCascadeTx(ctx context.Context, tx *sql.Tx, guid string) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM item WHERE guid=?`, guid); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM container_slot WHERE guid=?`, guid); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `DELETE FROM rig_component WHERE guid=?`, guid)
+	return err
+}
+
 // DeleteItemOfUID 删除指定玩家的一件物品，并返回是否确有行被删除。
 func (d *DB) DeleteItemOfUID(ctx context.Context, uid int64, guid string) (bool, error) {
 	r, err := d.SQL.ExecContext(ctx, `DELETE FROM item WHERE guid=? AND uid=?`, guid, uid)
