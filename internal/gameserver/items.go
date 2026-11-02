@@ -192,13 +192,6 @@ func (s *Server) ItemToTree(ctx context.Context, it *store.Item) (*proto.Value, 
 		s.canonicalizeItemPhysicalFields(ctx, it, obj.Fields)
 	}
 
-	// 船票：客户端选票过滤器要求状态位精确等于 16384、子类型含 16、未过期。
-	// 票定义里下发的是 20992，因此在每次物化时统一投影，保证登录快照（4/5）
-	// 与验票响应（3/7）看到的是同一份可用形态。
-	if it.TypeID == boatTicketTypeID {
-		applyTicketUsableToTree(obj, class, def)
-	}
-
 	// 鱼竿动态接管（竿上组件/钓组/挂线挂轮必须现算，快照过期会让插槽列表失真）
 	if class == "cnolibojkao" {
 		if err := s.rebuildRod(ctx, it, obj); err != nil {

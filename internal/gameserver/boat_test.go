@@ -23,18 +23,6 @@ func TestCheckTicket(t *testing.T) {
 		t.Fatalf("船票 type_id 应为 %d，实得 %d（wire %s）", boatTicketTypeID, it.TypeID, it.WireClass)
 	}
 
-	// 物化层投影：不管票在库里是什么形态，发给客户端时必须已是“可用票”，
-	// 否则登录快照里的票会被客户端选票过滤器排除（表现为选票框空白）。
-	tree, err := srv.ItemToTree(ctx, it)
-	if err != nil {
-		t.Fatalf("物化船票失败: %v", err)
-	}
-	if idx := fieldIdxByCS(it.WireClass, csSubtype); idx >= 0 {
-		if got := u64Of(tree.Fields[idx].Num); got&boatTicketSubtype == 0 {
-			t.Fatalf("物化后子类型应含 %d，实得 %d", boatTicketSubtype, got)
-		}
-	}
-
 	// 命中：返回船票对象本身。
 	req := proto.Args524(proto.U32(1), proto.GuidArr([]string{it.GUID}))
 	body, ok := hCheckTicket(miscCtx(sess, 3, 7, req))
