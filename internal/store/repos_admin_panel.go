@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -200,6 +201,51 @@ func (d *DB) SetPlayerSkillPointsAdmin(ctx context.Context, uid, skillID int64, 
 		INSERT INTO skill(uid, skill_id, points) VALUES(?,?,?)
 		ON CONFLICT(uid,skill_id) DO UPDATE SET points=excluded.points`, uid, skillID, points)
 	return err
+}
+
+// skillBonusKey 是管理员追加/扣减未分配技能点时使用的 kv 键。
+func skillBonusKey(uid int64) string { return fmt.Sprintf("skill_bonus:%d", uid) }
+
+// skillPointsTotalForAdmin 复刻游戏服的等级累计技能点公式，供后台展示与换算。
+func skillPointsTotalForAdmin(level int64) int64 {
+	var sum int64
+	for l := int64(2); l <= level; l++ {
+		switch {
+		case l < 20:
+			sum++
+		case l < 30:
+			sum += 2
+		case l < 40:
+			sum += 3
+		case l < 50:
+			sum += 4
+		default:
+			sum += 5
+		}
+	}
+	return sum
+}
+
+// SkillPointsAvailable 返回等级累计点数、已投入点数、管理员偏移与未分配点数。
+func (d *DB) SkillPointsAvailable(ctx context.Context, uid int64) (total, spent, bonus, avail int64) {
+	p, err := d.EnsureProfile(ctx, uid)
+	if err == nil && p != nil {
+		total = skillPointsTotalForAdmin(p.Level)
+	}
+	spent, _ = d.SkillNodeLevelSum(ctx, uid)
+	if v, ok, kerr := d.KVGet(ctx, skillBonusKey(uid)); kerr == nil && ok {
+		bonus, _ = strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+	}
+	avail = total - spent + bonus
+	if avail < 0 {
+		avail = 0
+	}
+	return
+}
+
+// SetSkillBonus 写入管理员偏移；调用方负责把目标未分配点数换算成偏移量。
+func (d *DB) SetSkillBonus(ctx context.Context, uid, bonus int64) error {
+	return d.KVSet(ctx, skillBonusKey(uid), strconv.FormatInt(bonus, 10))
 }
 
 func (d *DB) ListAdminStores(ctx context.Context) ([]*AdminStoreView, error) {
