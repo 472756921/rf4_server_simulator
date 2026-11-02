@@ -13,7 +13,8 @@ import (
 
 // ---- 地点解析 ----
 
-// sublocPrefix 从场景名（loc1_02 / lvl2_01）提取 level 前缀（level_001_）。
+// sublocPrefix 从场景名（loc1_02 / lvl2_01 / lvl_004_05）提取 level 前缀（level_001_）。
+// 客户端在钓鱼时上报的是场景名，编号可能带前导下划线和三位补零，必须一并兼容。
 func sublocPrefix(loc string) string {
 	body := loc
 	if strings.HasPrefix(body, "loc") {
@@ -23,12 +24,16 @@ func sublocPrefix(loc string) string {
 	} else {
 		return ""
 	}
-	us := strings.IndexByte(body, '_')
-	if us <= 0 {
+	body = strings.TrimLeft(body, "_")
+	if body == "" {
 		return ""
 	}
-	n, err := strconv.Atoi(body[:us])
-	if err != nil {
+	numPart := body
+	if us := strings.IndexByte(body, '_'); us > 0 {
+		numPart = body[:us]
+	}
+	n, err := strconv.Atoi(numPart)
+	if err != nil || n <= 0 {
 		return ""
 	}
 	return "level_" + fmt03(n) + "_"

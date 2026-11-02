@@ -447,3 +447,12 @@ func (s *Server) itemDefForRow(ctx context.Context, row *store.Item) (*store.Ite
 	}
 	return nil, nil
 }
+
+// itemDefStr 读取 item_def.attrs_json 里的字符串字段（如地图的 dhaenhabecc）。
+func itemDefStr(def *store.ItemDef, key string) string {
+	if def == nil {
+		return ""
+	}
+	s, _ := defAttrs(def)[key].(string)
+	return s
+}

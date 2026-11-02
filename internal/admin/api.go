@@ -69,6 +69,7 @@ func NewServer(cfg config.Admin, db *store.DB, log logger, webFS fs.FS) *Server 
 	mux.HandleFunc("POST /api/players/keepnet/add", auth(s.handlePlayerKeepnetAdd))
 	mux.HandleFunc("POST /api/players/keepnet/delete", auth(s.handlePlayerKeepnetDelete))
 	mux.HandleFunc("POST /api/players/skills/update", auth(s.handlePlayerSkillUpdate))
+	mux.HandleFunc("POST /api/players/skills/points", auth(s.handlePlayerSkillPoints))
 	mux.HandleFunc("POST /api/players/kick", auth(s.handleKick))
 	mux.HandleFunc("POST /api/players/ban", auth(s.handleBan))
 	mux.HandleFunc("GET /api/catalog/items", auth(s.handleCatalogItems))
@@ -313,6 +314,7 @@ func (s *Server) handlePlayerDetail(w http.ResponseWriter, r *http.Request) {
 			"created_ts": m.CreatedTS, "read": m.Read,
 		})
 	}
+	skillTotal, skillSpent, skillBonus, skillAvail := s.db.SkillPointsAvailable(ctx, uid)
 	writeJSON(w, map[string]any{
 		"uid": p.UID, "name": p.Name, "level": p.Level, "xp": p.XP,
 		"silver": p.Silver, "gold": p.Gold, "bank": p.Bank,
@@ -320,6 +322,8 @@ func (s *Server) handlePlayerDetail(w http.ResponseWriter, r *http.Request) {
 		"role": p.Role, "banned": p.Banned,
 		"item_count": len(items), "keepnet_count": len(keepnet), "mail_count": len(mails),
 		"items": items, "keepnet": keepnet, "mails": mailRows, "skills": skills,
+		"skill_total": skillTotal, "skill_spent": skillSpent,
+		"skill_bonus": skillBonus, "available_points": skillAvail,
 	})
 }
 

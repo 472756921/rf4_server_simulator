@@ -162,20 +162,9 @@ func (s *Server) fishingEnd(ctx *Ctx) ([]byte, bool) {
 
 // build813 搏鱼统计块（813 内嵌 310 + 25）。
 func (s *Server) build813(ctx context.Context, uid int64, f *RolledFish, prevBest int64) *proto.Value {
-	// SPECIES_FIGHT_STATICS 鱼种静态组
-	var f0, f1, f2, f3, f5 float64
-	switch f.Species {
-	case "crucian":
-		f0, f1, f2, f3, f5 = 300, 1900, 3200, 3998, 3954
-	case "c.roach":
-		f0, f1, f2, f3, f5 = 220, 1200, 2000, 2498, 2473
-	case "perch":
-		f0, f1, f2, f3, f5 = 280, 1600, 2700, 3477, 3312
-	case "s.bream":
-		f0, f1, f2, f3, f5 = 140, 800, 1200, 1396, 1205
-	default:
-		f0, f1, f2, f3, f5 = 280, 1600, 2700, 3477, 3312
-	}
+	// SPECIES_FIGHT_STATICS 鱼种静态组（未知鱼种按 species_weight 推导）
+	st := s.settleStatics(ctx, f.Species)
+	f0, f1, f2, f3, f5 := float64(st[0]), float64(st[1]), float64(st[2]), float64(st[3]), float64(st[5])
 	f4 := f3 * (0.9 + rand.Float64()*0.2)
 	// 银价（分）= round(silverRate × max(1,w))，用未除数速率
 	_, silverRate := 0.4, 0.0

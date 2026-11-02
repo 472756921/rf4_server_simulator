@@ -3,6 +3,8 @@ package gameserver
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"rf4server/internal/proto"
 	"rf4server/internal/store"
@@ -178,6 +180,22 @@ func hStoreBuy(goldCol bool) Handler {
 				return []byte{0x0F}, true
 			}
 			granted = append(granted, row)
+		}
+		// 购买纸质地图（category 40）时同时解锁对应地点，否则客户端旅行页
+		// 仍显示未购买。地点 key 取自 item_def 的 dhaenhabecc 字段。
+		if strings.HasPrefix(itemID, "papermap") {
+			if def, derr := srv.DB.GetItemDefByItemID(cctx, itemID); derr == nil && def != nil {
+				if place := itemDefStr(def, "dhaenhabecc"); place != "" {
+					if _, e := tx.ExecContext(cctx, `
+						INSERT INTO place_access(uid, place, kind, ts) VALUES(?,?, 'buyout', ?)
+						ON CONFLICT(uid, place, kind) DO NOTHING`,
+						uid, place, float64(time.Now().Unix())); e != nil {
+						ctx.Log.Warn("地图解锁失败", "item", itemID, "place", place, "err", e)
+					} else {
+						ctx.Log.Info("购买地图并解锁地点", "item", itemID, "place", place, "price", price)
+					}
+				}
+			}
 		}
 		if err := tx.Commit(); err != nil {
 			ctx.Log.Warn("商店事务提交失败", "item", itemID, "err", err)

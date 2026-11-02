@@ -46,7 +46,7 @@ button,input,select,textarea{font:inherit;color:var(--text)}button{cursor:pointe
   </aside>
   <main class="main">
     <header class="topbar"><div><h1 id="pageTitle">总览</h1><p id="pageSub">服务器运行状态与快捷操作</p></div><div class="top-actions"><button class="btn alt" onclick="refreshCurrent()">刷新</button></div></header>
-    <section class="view on" id="view-dashboard"><div class="grid stats" id="stats"></div><div class="card" style="margin-top:16px"><div class="section-head"><h2>快捷入口</h2><small>常用管理动作</small></div><div class="actions"><button class="btn" onclick="go('players')">管理玩家</button><button class="btn alt" onclick="go('stores')">修改库存</button><button class="btn alt" onclick="go('fish')">调整鱼口</button><button class="btn alt" onclick="go('mail')">发送邮件</button></div></div></section>
+    <section class="view on" id="view-dashboard"><div class="grid stats" id="stats"></div><div class="card" style="margin-top:16px"><div class="section-head"><h2>运行参数</h2><small>热更新：修改后 30 秒内生效（部分立即生效）</small></div><div id="tunablesBody"></div></div><div class="card" style="margin-top:16px"><div class="section-head"><h2>快捷入口</h2><small>常用管理动作</small></div><div class="actions"><button class="btn" onclick="go('players')">管理玩家</button><button class="btn alt" onclick="go('stores')">修改库存</button><button class="btn alt" onclick="go('fish')">调整鱼口</button><button class="btn alt" onclick="go('mail')">发送邮件</button></div></div></section>
     <section class="view" id="view-players"><div class="split"><div class="card player-list"><div class="toolbar"><input class="grow" id="playerSearch" placeholder="搜索 UID / 昵称" onkeydown="if(event.key==='Enter')loadPlayers()"><button class="btn sm" onclick="loadPlayers()">搜索</button></div><div id="playerList" style="margin-top:12px"></div></div><div class="card" id="playerDetail"><div class="empty">选择左侧玩家开始管理</div></div></div></section>
     <section class="view" id="view-stores"><div class="card"><div class="toolbar"><select id="storeSelect" class="grow" onchange="loadStoreItems()"></select><input id="storeSearch" placeholder="搜索商品 / 名称" onkeydown="if(event.key==='Enter')loadStoreItems()"><button class="btn" onclick="loadStoreItems()">查询</button></div><div id="storeSummary" class="muted" style="margin:12px 0"></div><div class="table-wrap" id="storeTable"></div></div></section>
     <section class="view" id="view-fish"><div class="grid" style="grid-template-columns:270px minmax(0,1fr)"><div class="card"><div class="section-head"><h2>水域</h2></div><input id="fishSearch" placeholder="筛选水域" oninput="renderFishAreas()"><div id="fishAreas" style="margin-top:10px;max-height:70vh;overflow:auto"></div></div><div class="card" id="fishEditor"><div class="empty">选择水域配置鱼口</div></div></div></section>
@@ -111,6 +111,38 @@ async function loadDashboard(){
   const d=await api('/api/dashboard');
   const stats=[['在线会话',d.sessions,'主服实时'],['玩家档案',d.players,'已创建'],['物品实例',d.items,'背包+装备'],['邮件',d.mails,'全部记录'],['运行参数',d.tunables,'热更新'],['审计事件',d.audits,'累计']];
   $('#stats').innerHTML=stats.map(([k,v,s])=>`<div class="card stat"><div class="k">${k}</div><div class="v">${fmt(v)}</div><div class="s">${s}</div></div>`).join('');
+  await loadTunables();
+}
+const TUNABLE_DEFS=[
+  ['bite_probability','上鱼概率（1=每竿必出）',1],
+  ['bite_delay_fixed','固定咬钩秒（>0 覆盖分布）',0],
+  ['bite_delay_scale','咬钩延迟倍率',1],
+  ['bite_delay_max','咬钩上限秒',20],
+  ['bite_delay_lure_max','路亚上限秒',6],
+  ['bait_pref_scale','饵效强度（0=关闭）',1],
+  ['bait_pref_weight_shift','饵效偏大体型',1],
+  ['xp_gain','经验倍率',1],
+  ['release_xp_ratio','放生经验比例',0.5],
+  ['fight_power_scale','搏斗拉力倍率（越低越不易断线）',1],
+  ['fish_weight_scale','鱼体重倍率（2=两倍重）',1],
+  ['settle_scale_debug','结算刻度调试（0=关）',0],
+];
+async function loadTunables(){
+  let t={};
+  try{ t=await api('/api/tunables'); }catch(e){}
+  if(!t||typeof t!=='object')t={};
+  const rows=TUNABLE_DEFS.map(([key,label,def])=>{
+    const val=t[key]!==undefined?t[key]:'';
+    return `<tr><td>${esc(label)}</td><td class="mono">${key}</td><td><input type="text" id="tun_${key}" value="${esc(String(val))}" placeholder="默认 ${def}" style="width:110px"></td><td><button class="btn sm" onclick="saveTunable('${key}')">保存</button></td></tr>`;
+  }).join('');
+  $('#tunablesBody').innerHTML=`<div class="table-wrap"><table><thead><tr><th>参数</th><th>键</th><th>值</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+async function saveTunable(key){
+  const v=$('#tun_'+key).value.trim();
+  if(v===''){toast('请输入数值','bad');return}
+  await api('/api/tunables',{method:'POST',body:JSON.stringify({key,value:v})});
+  toast('已保存，最多 30 秒生效');
+  await loadTunables();
 }
 async function loadAudit(){
   const list=await api('/api/audit?limit=200');
@@ -185,8 +217,10 @@ function showAddKeepnet(){showModal('添加护网鱼','可直接输入鱼种 key
 async function searchFishForKeepnet(){const q=$('#knSpecies').value.trim();const list=await api('/api/fish/pool?q='+encodeURIComponent(q)+'&limit=40');$('#knFishResults').innerHTML=list.map(x=>`<div class="result" data-key="${esc(x.fish_key)}" onclick="$('#knSpecies').value=this.dataset.key"><div><b>${esc(x.name_zh)}</b><div class="muted mono">${esc(x.fish_key)}</div></div><span class="tag">${fmt(x.min_g)}-${fmt(x.max_g)}g</span></div>`).join('')||'<div class="empty">无结果</div>'}
 async function addKeepnet(){const body={uid:PLAYER.uid,species:$('#knSpecies').value.trim(),weight_g:+$('#knWeight').value,cat:+$('#knCat').value,keep_level:$('#knLevel').value.trim(),keep_loc:$('#knLoc').value.trim(),keep_spot:+$('#knSpot').value||0,keep_bait:$('#knBait').value.trim()};if(!body.species||body.weight_g<=0)return toast('请填写鱼种和重量','bad');await api('/api/players/keepnet/add',{method:'POST',body:JSON.stringify(body)});closeModal();toast('添加指令已发送');await sleep(2300);await selectPlayer(PLAYER.uid);setPlayerTab('keepnet')}
 function renderSkills(){
-  const skills=PLAYER.skills||[];$('#playerTabBody').innerHTML=`<div class="skills">${skills.map(s=>`<div class="skill"><div class="top"><div><b>${esc(s.name)}</b><div class="muted">大类 ${s.skill_id} · ${s.node_count} 个节点</div></div><span class="pill">${Number(s.points).toFixed(2)}%</span></div><div class="bar"><i style="width:${Math.min(100,Number(s.points)/110*100)}%"></i></div><div class="edit"><input type="number" min="0" max="110" step="0.1" value="${s.points}" id="sk_${s.skill_id}"><button class="btn sm" onclick="saveSkill(${s.skill_id})">保存</button></div></div>`).join('')}</div><div class="actions"><button class="btn alt" onclick="resetSkills()">全部设为 0%</button></div>`;
+  const skills=PLAYER.skills||[];const avail=Number(PLAYER.available_points??0);
+  $('#playerTabBody').innerHTML=`<div class="toolbar" style="margin-bottom:12px"><div class="grow"><b>未分配技能点：${avail}</b><div class="muted">等级累计 ${PLAYER.skill_total??0} · 已投入 ${PLAYER.skill_spent??0} · 偏移 ${PLAYER.skill_bonus??0}</div></div><input class="mini-input" id="skillAvail" type="number" min="0" step="1" value="${avail}" style="width:110px"><button class="btn sm" onclick="saveSkillAvail()">保存点数</button></div><div class="skills">${skills.map(s=>`<div class="skill"><div class="top"><div><b>${esc(s.name)}</b><div class="muted">大类 ${s.skill_id} · ${s.node_count} 个节点</div></div><span class="pill">${Number(s.points).toFixed(2)}%</span></div><div class="bar"><i style="width:${Math.min(100,Number(s.points)/110*100)}%"></i></div><div class="edit"><input type="number" min="0" max="110" step="0.1" value="${s.points}" id="sk_${s.skill_id}"><button class="btn sm" onclick="saveSkill(${s.skill_id})">保存</button></div></div>`).join('')}</div><div class="actions"><button class="btn alt" onclick="resetSkills()">全部设为 0%</button></div>`;
 }
+async function saveSkillAvail(){const points=Math.max(0,Math.floor(+$('#skillAvail').value||0));await api('/api/players/skills/points',{method:'POST',body:JSON.stringify({uid:PLAYER.uid,points})});toast('未分配技能点已更新');await sleep(500);await selectPlayer(PLAYER.uid);setPlayerTab('skills')}
 async function saveSkill(id){const points=+$('#sk_'+id).value;await api('/api/players/skills/update',{method:'POST',body:JSON.stringify({uid:PLAYER.uid,skill_id:id,points})});toast('熟练度已更新');await sleep(500);await selectPlayer(PLAYER.uid);setPlayerTab('skills')}
 async function resetSkills(){if(!confirm('把所有技能大类熟练度设为 0%？'))return;for(const s of PLAYER.skills||[])await api('/api/players/skills/update',{method:'POST',body:JSON.stringify({uid:PLAYER.uid,skill_id:s.skill_id,points:0})});toast('全部熟练度已清零');await selectPlayer(PLAYER.uid);setPlayerTab('skills')}
 function renderPlayerMail(){const rows=PLAYER.mails||[];$('#playerTabBody').innerHTML=`<div class="table-wrap"><table><thead><tr><th>ID</th><th>正文</th><th>类型</th><th>状态</th><th>时间</th></tr></thead><tbody>${rows.map(m=>`<tr><td>${m.id}</td><td style="white-space:normal">${esc(m.text||'(附件邮件)')}</td><td>${m.kind?'附件':'文本'}</td><td>${m.read?'<span class="pill">已读</span>':'<span class="pill ok">未读</span>'}</td><td>${timeText(m.created_ts)}</td></tr>`).join('')||'<tr><td colspan="5" class="empty">邮箱为空</td></tr>'}</tbody></table></div><div class="actions"><button class="btn" onclick="prefillMail(${PLAYER.uid})">给该玩家发邮件</button></div>`}

@@ -204,8 +204,7 @@ func (s *Server) handleFishPool(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, out)
 }
 
-func (s *Server) handlePlayerSkillUpdate(w http.ResponseWriter, r *http.Request) {
-	var req struct {
+func (s *Server) handlePlayerSkillUpdate(w http.ResponseWriter, r *http.Request) {	var req struct {
 		UID     int64   `json:"uid"`
 		SkillID int64   `json:"skill_id"`
 		Points  float64 `json:"points"`
@@ -224,6 +223,36 @@ func (s *Server) handlePlayerSkillUpdate(w http.ResponseWriter, r *http.Request)
 	_ = s.db.AuditLogWrite(r.Context(), adminOf(r), "skill_proficiency",
 		fmt.Sprintf("%d/%d", req.UID, req.SkillID), fmt.Sprintf("%.3f", req.Points))
 	writeJSON(w, map[string]any{"ok": true})
+}
+
+// handlePlayerSkillPoints 直接设置玩家的"未分配技能点"。
+// 未分配点数 = 等级累计点数 - 已投入节点等级 + 管理员偏移，
+// 因此这里把目标值换算成偏移量后写入 kv，不修改等级或节点数据。
+func (s *Server) handlePlayerSkillPoints(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		UID    int64 `json:"uid"`
+		Points int64 `json:"points"`
+	}
+	if err := readJSON(r, &req); err != nil || req.UID == 0 || req.Points < 0 {
+		httpError(w, 400, "参数错误")
+		return
+	}
+	if req.Points > 1000000 {
+		req.Points = 1000000
+	}
+	total, spent, _, _ := s.db.SkillPointsAvailable(r.Context(), req.UID)
+	bonus := req.Points - (total - spent)
+	if err := s.db.SetSkillBonus(r.Context(), req.UID, bonus); err != nil {
+		httpError(w, 500, err.Error())
+		return
+	}
+	_ = s.db.QueuePush(r.Context(), mustJSON(map[string]any{
+		"op": "refresh_skills", "uid": req.UID,
+	}))
+	_ = s.db.AuditLogWrite(r.Context(), adminOf(r), "skill_points",
+		fmt.Sprintf("%d", req.UID), fmt.Sprintf("available=%d bonus=%d", req.Points, bonus))
+	_, _, _, avail := s.db.SkillPointsAvailable(r.Context(), req.UID)
+	writeJSON(w, map[string]any{"ok": true, "available_points": avail})
 }
 
 func (s *Server) handlePlayerItemDelete(w http.ResponseWriter, r *http.Request) {

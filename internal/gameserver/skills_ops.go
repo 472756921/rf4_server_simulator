@@ -5,6 +5,8 @@ package gameserver
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 
 	"rf4server/internal/proto"
 )
@@ -150,13 +152,29 @@ func (s *Server) replySkillTree(ctx *Ctx) ([]byte, bool) {
 	return body, true
 }
 
-// skillAvailablePoints 返回等级累计技能点减去已投入点数后的余额。
+// skillBonusPoints 返回管理员通过后台追加/扣减的未分配技能点（kv 偏移量）。
+func (s *Server) skillBonusPoints(ctx context.Context, uid int64) int64 {
+	if s.DB == nil {
+		return 0
+	}
+	v, ok, err := s.DB.KVGet(ctx, fmt.Sprintf("skill_bonus:%d", uid))
+	if err != nil || !ok {
+		return 0
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+// skillAvailablePoints 返回等级累计技能点减去已投入点数后的余额（含管理员偏移）。
 func (s *Server) skillAvailablePoints(ctx context.Context, uid int64) int64 {
 	p, err := s.DB.EnsureProfile(ctx, uid)
 	if err != nil {
 		return 0
 	}
-	total := skillPointsTotal(p.Level)
+	total := skillPointsTotal(p.Level) + s.skillBonusPoints(ctx, uid)
 	spent, err := s.DB.SkillNodeLevelSum(ctx, uid)
 	if err != nil {
 		return 0

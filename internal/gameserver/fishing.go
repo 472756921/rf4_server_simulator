@@ -470,6 +470,13 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 		modeMult = 1.0 + 0.12*float64(t)*prefShift
 	}
 	w := s.sampleWeightDB(cctx, key, modeMult)
+	// fish_weight_scale：整体缩放鱼的实际体重（在判档与装备上限之前）。
+	if k := s.tunableF("fish_weight_scale", 1.0); k > 0 && k != 1.0 {
+		w = int64(math.Round(float64(w) * k))
+		if w < 1 {
+			w = 1
+		}
+	}
 	// 有可信装备数据时，将重量限制在钓组上限内；gearCapKg<=0 时不设额外上限。
 	if gearCapKg > 0 {
 		w = capWeightGrams(w, int64(gearCapKg*1000))
@@ -640,6 +647,9 @@ func (s *Server) rollFishPoolsWithRules(loc string, gearCapKg float64, bonus fis
 	// 三角分布（偏向 min + 30% 区间）
 	mode := float64(e.minG) + float64(e.maxG-e.minG)*0.3
 	w := triangular(float64(e.minG), float64(e.maxG), mode)
+	if k := s.tunableF("fish_weight_scale", 1.0); k > 0 && k != 1.0 {
+		w *= k
+	}
 	// 有装备物理数据时使用动态上限；缺少可信数据时使用内置上限，
 	// 并按 fight_tolerance 放宽。
 	cap := poolWeightCapG(gearCapKg, bonus.FightTolerance)
@@ -869,6 +879,11 @@ func (s *Server) buildFish27(f *RolledFish, hookGUID, gearGuid string) *proto.Va
 		f19v, f20v = fb[19], fb[20]
 	}
 	pull := math.Max(0.5, math.Round(w*speciesPullKOrDefault(f.Species)*10000)/10000)
+	// fight_power_scale：整体缩放鱼的拉力（同时影响 26 条张力曲线）。
+	// 调低可显著减少断线与收杆脱钩，调高则更硬核；默认 1.0 不改变原行为。
+	if k := s.tunableF("fight_power_scale", 1.0); k > 0 && k != 1.0 {
+		pull = math.Max(0.5, math.Round(pull*k*10000)/10000)
+	}
 	score := math.Round(pushScoreRate(f.Species, f.Grade)*math.Max(1, w)*100) / 100
 	quality := fishQuality(f.Species, f.Grade)
 

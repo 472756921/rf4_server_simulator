@@ -823,6 +823,7 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 		}
 	}
 	st.mu.Lock()
+	ctx.Log.Info("14/12 鱼状态", "f0", f0)
 	if f0 == 3 {
 		st.PushSent = false
 		pending := st.Pending
@@ -834,8 +835,23 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 		}
 		return nil, true
 	}
-	if f0 == 5 || f0 == 6 {
-		// 弃咬离开 / 新鱼替换：保持等待起竿或鱼自行离开（f0∈{1,8}）
+	if f0 == 5 {
+		// 鱼已脱钩离开（含断线跑鱼）：本轮作废，后续 14/4 不能再结算成渔获。
+		// 否则会出现"鱼线已断、鱼却进了护网"的错账。
+		ctx.Log.Info("14/12 鱼已脱钩离开", "f0", f0)
+		if st.biteTimer != nil {
+			st.biteTimer.Stop()
+		}
+		st.Resolved = true
+		st.Pending = nil
+		st.CastActive = false
+		st.Hooked = false
+		st.mu.Unlock()
+		srv.bumpFishingCounter(ctx.Sess.Userid, "escapes")
+		return nil, true
+	}
+	if f0 == 6 {
+		// 新鱼已替换旧鱼：不重推，保持当前等待状态。
 		ctx.Log.Info("14/12 鱼状态通知", "f0", f0)
 		st.mu.Unlock()
 		return nil, true
