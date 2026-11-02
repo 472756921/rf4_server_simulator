@@ -24,7 +24,13 @@ var rigTypeNames = map[int64]string{
 	22: "rig_JerkbaitRig", 23: "rig_BottomMarker", 24: "rig_BottomHair",
 	25: "rig_BottomSnowman", 26: "rig_BottomPopup", 27: "rig_BottomHingedStiff",
 	28: "rig_BottomChod", 29: "rig_BottomMaggot",
-	31: "rig_FloatCarpPopUp", 32: "rig_BottomMethodPopUp",
+	30: "rig_FloatCarpHair", 31: "rig_FloatCarpPopUp", 32: "rig_BottomMethodPopUp",
+	33: "rig_Fly", 34: "rig_BottomFixedZigRig", 35: "rig_HairyJigRig",
+	50: "rig_MarinePilker", 51: "rig_MarineLureJig", 52: "rig_MarineFilletJig",
+	53: "rig_MarineGiganticLureJig", 54: "rig_MarineGiganticFishJig",
+	55: "rig_MarineBottomClassic", 56: "rig_MarineBottomWithRattlingSinker",
+	57: "rig_MarineBottomPaternoster", 58: "rig_MarineBottomWithFlyingColarLure",
+	59: "rig_MarineBottomWithDeadFish", 60: "rig_MarineBottomDropShot",
 }
 
 // rodRigAllowed 定义竿类型允许使用的钓组类型；0 或未知类型不做限制。
@@ -44,6 +50,13 @@ var rodRigAllowed = map[int64][]int64{
 	14: {23},
 	15: {50, 51, 52, 53, 54},
 	16: {50, 51, 52, 53, 54, 55, 56, 57, 58, 59},
+}
+
+// rodDefaultRigType 为同一允许矩阵内需要区分默认子族的竿型指定首选钓组。
+// 海竿 15（Pilker 竿）默认垂直铁板钓组；船竿 16（Bottom 竿）默认经典海钓沉底。
+var rodDefaultRigType = map[int64]int64{
+	15: 50, // rig_MarinePilker
+	16: 55, // rig_MarineBottomClassic
 }
 
 // bottomRigTypes 沉底族（无浮漂槽、竿尖梢必需）。
@@ -70,6 +83,10 @@ func (s *Server) defaultRigTypeForRod(ctx context.Context, rodItemID string) int
 		rodType = int64(v)
 	}
 	if allowed, ok := rodRigAllowed[rodType]; ok {
+		if preferred, ok := rodDefaultRigType[rodType]; ok &&
+			allowedContains(allowed, preferred) && rigTypeNames[preferred] != "" {
+			return preferred
+		}
 		for _, rt := range allowed {
 			if rigTypeNames[rt] != "" {
 				return rt
