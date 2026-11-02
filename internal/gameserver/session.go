@@ -92,7 +92,7 @@ func (s *Session) SendEnvelope(env []byte) {
 // 服务端推送 body 的顶层必须是 args，并符合 command_contract 的 push_args 声明。
 // 形状不符时只丢弃该推送，避免破坏客户端通道。
 func (s *Session) Push(main, sub uint8, body *proto.Value) uint32 {
-	if s.closed.Load() {
+	if s.closed.Load() || s.tunnel == nil {
 		return 0
 	}
 	bodyBytes, err := proto.EncodeValue(body, s.Srv.table)

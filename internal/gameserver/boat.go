@@ -30,6 +30,9 @@ const (
 	boatTicketStationAttr = "algmimlfbdj"
 	// boatTicketDurationAttr 是船票定义里的租用时长（分钟）。
 	boatTicketDurationAttr = "gloegohmand"
+	// boatTicketTimedSubtype 是 pfapfdlnfbj.fhblahbelfd：限时票据标记位，
+	// 客户端据此在背包/提示中显示剩余时长。
+	boatTicketTimedSubtype = 16
 )
 
 func init() { RegisterExtra(registerBoatHandlers) }
@@ -65,15 +68,18 @@ func hCheckTicket(ctx *Ctx) ([]byte, bool) {
 		}
 	}
 	if len(realGUIDs) == 0 {
-		if tree := srv.pickStationTicket(ctx, station); tree != nil {
+		// 不带 GUID 表示"这个码头现在能用哪张票"。
+		// 若已有仍在有效期内的激活票，直接复用它——否则玩家每次上船都会被
+		// 追问一次票。没有激活票时才回 null，让客户端弹选票框。
+		if tree := srv.activeRentalTicket(ctx, station); tree != nil {
 			body, err := proto.EncodeValue(tree, ctx.Sess.Table())
 			if err == nil {
-				ctx.Log.Info("3/7 按站点选票命中", "station", station)
+				ctx.Log.Info("3/7 复用有效期内的船票", "station", station)
 				return body, true
 			}
-			ctx.Log.Warn("3/7 按站点选票编码失败", "err", err)
+			ctx.Log.Warn("3/7 复用船票编码失败", "err", err)
 		}
-		ctx.Log.Info("3/7 无可选船票，回 null", "station", station)
+		ctx.Log.Info("3/7 无可复用的票，回 null 交由客户端弹选票框", "station", station)
 		return []byte{0x00}, true
 	}
 
@@ -97,7 +103,7 @@ func hCheckTicket(ctx *Ctx) ([]byte, bool) {
 			}
 		}
 		// 选中票即开始租用：写入 knpoijanngk / 租期 / 时效对象并落库。
-		if startTicketRent(ctx, srv.DB, row, def) {
+		if srv.startTicketRent(ctx, row, def) {
 			ctx.Log.Info("3/7 船票开始租用", "guid", guidShort(g), "item", row.ItemID)
 		}
 		tree, terr := srv.ItemToTree(cctx, row)
@@ -110,6 +116,10 @@ func hCheckTicket(ctx *Ctx) ([]byte, bool) {
 			ctx.Log.Warn("3/7 编码失败", "guid", guidShort(g), "err", berr)
 			continue
 		}
+		// 客户端构造租用记录读的是本地票对象，必须在回包前把"租用中"推给它，
+		// 否则它用旧的（未租用）票构造记录，看门狗判定失败并传回岸边。
+		ctx.Sess.Push(4, 21, proto.Args524(proto.GuidArr([]string{row.GUID})))
+		ctx.Sess.Push(4, 22, proto.Args(proto.S("61"), tree))
 		ctx.Log.Info("3/7 验票通过", "guid", guidShort(g), "item", row.ItemID, "station", station)
 		return body, true
 	}
@@ -140,24 +150,39 @@ func (s *Server) pickStationTicket(ctx *Ctx, station uint64) *proto.Value {
 				continue
 			}
 		}
+		// 必须在这里就写入租用状态：客户端构造租用记录时读的是票对象里的
+		// knpoijanngk，等它选完再写已经来不及（那时记录已失败）。
+		rented := s.startTicketRent(ctx, row, def)
 		tree, terr := s.ItemToTree(cctx, row)
 		if terr != nil {
 			continue
 		}
+		if rented {
+			ctx.Log.Info("3/7 按站点选票：已开始租用", "guid", guidShort(g), "item", row.ItemID)
+		}
+		ctx.Sess.Push(4, 21, proto.Args524(proto.GuidArr([]string{row.GUID})))
+		ctx.Sess.Push(4, 22, proto.Args(proto.S("61"), tree))
 		return tree
 	}
 	return nil
 }
 
 // startTicketRent 写入"已租用"状态并落库；返回是否发生改动。
-func startTicketRent(ctx *Ctx, db *store.DB, row *store.Item, def *store.ItemDef) bool {
+//
+// 租期默认取票定义里的 gloegohmand（分钟），可用运行参数 boat_rent_minutes
+// 覆盖（管理后台 /api/tunables，用于短租期测试）。
+func (s *Server) startTicketRent(ctx *Ctx, row *store.Item, def *store.ItemDef) bool {
 	minutes := uint64(1440)
 	if def != nil {
 		if v, ok := defAttrU64(def, boatTicketDurationAttr); ok && v > 0 {
 			minutes = v
 		}
 	}
+	if v := s.tunableF("boat_rent_minutes", 0); v > 0 {
+		minutes = uint64(v)
+	}
 	nowMin := uint64(time.Now().Unix() / 60)
+	db := s.DB
 
 	fields, err := FieldsFromJSON(row.FieldsJSON)
 	if err != nil {
@@ -176,6 +201,15 @@ func startTicketRent(ctx *Ctx, db *store.DB, row *store.Item, def *store.ItemDef
 			changed = true
 		}
 	}
+	// 子类型置 16（pfapfdlnfbj.fhblahbelfd）：客户端把它当作"限时/生效中的票据"，
+	// 背包与提示里的剩余时长依赖这个标记。状态位保持定义值不动。
+	if idx := fieldIdxByCS(row.WireClass, csSubtype); idx >= 0 && idx < len(fields) {
+		cur := u64Of(fields[idx].Num)
+		if cur&boatTicketTimedSubtype == 0 {
+			fields[idx].Num = ptrU64(cur | boatTicketTimedSubtype)
+			changed = true
+		}
+	}
 	if idx := fieldIdxByCS(row.WireClass, "bkmnbppciao"); idx >= 0 && idx < len(fields) {
 		if fields[idx].Val == nil || fields[idx].Val.Kind != proto.KindObj {
 			fields[idx].Val = wiregen.MustMakeObj("mbplhipcojh", map[int]*proto.Value{
@@ -183,6 +217,14 @@ func startTicketRent(ctx *Ctx, db *store.DB, row *store.Item, def *store.ItemDef
 				1: proto.U32(uint32(nowMin)), // 时效起始（分钟）
 				2: proto.U32(uint32(minutes)), // 时效时长（分钟）
 			})
+			changed = true
+		}
+	}
+	// 票的到期时间必须覆盖整个租期，否则客户端认为租用区间超出票有效期。
+	if idx := fieldIdxByCS(row.WireClass, csUpdated); idx >= 0 && idx < len(fields) {
+		expiry := uint64(proto.WindowsFiletimeNow()) + minutes*60*10_000_000
+		if u64Of(fields[idx].Num) < expiry {
+			fields[idx].Num = ptrU64(expiry)
 			changed = true
 		}
 	}
@@ -210,4 +252,48 @@ func isZeroGUID(g string) bool {
 		}
 	}
 	return true
+}
+
+// activeRentalTicket 找一张"已激活且未过期"的船票并物化返回。
+//
+// 判定：knpoijanngk 为真，且票的到期时间（iingicaldbk，FILETIME）仍在未来。
+// startTicketRent 写入租用状态时会把到期时间对齐到租期结束，因此这一个
+// 条件就同时覆盖了"已租用"和"未过期"。
+func (s *Server) activeRentalTicket(ctx *Ctx, station uint64) *proto.Value {
+	cctx := ctx.Sess.pushCtx()
+	guids, err := s.DB.ItemGUIDsByContainers(cctx, ctx.Sess.Userid, []string{"backpack"})
+	if err != nil {
+		return nil
+	}
+	now := uint64(proto.WindowsFiletimeNow())
+	for _, g := range guids {
+		row, rerr := s.DB.GetItemByGUID(cctx, g)
+		if rerr != nil || row == nil || row.UID != ctx.Sess.Userid || row.TypeID != boatTicketTypeID {
+			continue
+		}
+		fields, ferr := FieldsFromJSON(row.FieldsJSON)
+		if ferr != nil {
+			continue
+		}
+		if idx := fieldIdxByCS(row.WireClass, "knpoijanngk"); idx < 0 || idx >= len(fields) {
+			continue
+		} else if u64Of(fields[idx].Num) != 1 {
+			continue
+		}
+		if idx := fieldIdxByCS(row.WireClass, csUpdated); idx >= 0 && idx < len(fields) {
+			if u64Of(fields[idx].Num) <= now {
+				continue // 已过期
+			}
+		}
+		if def, derr := s.DB.GetItemDef(cctx, row.NumericID); derr == nil && def != nil && station > 0 {
+			if st, ok := defAttrU64(def, boatTicketStationAttr); ok && st != station {
+				continue
+			}
+		}
+		tree, terr := s.ItemToTree(cctx, row)
+		if terr == nil {
+			return tree
+		}
+	}
+	return nil
 }
