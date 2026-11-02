@@ -18,6 +18,7 @@ const (
 	season5013F2  = uint64(134265924000000000)
 	f32Const801F2 = uint32(1092571843) // 801.f2 位型
 	castDepthBits = uint32(1091032928) // 158.f2 = f32 8.4900818
+	profileFlags  = uint32(17 | 0x100) // 0x100：跳过绑定邮箱提示
 )
 
 // BuildPose308 玩家姿态块（2/2 与 307.f12 共用；f7=世界时钟 FILETIME）。
@@ -127,7 +128,7 @@ func (s *Server) BuildProfile307(ctx context.Context, uid int64) (*proto.Value, 
 		12: BuildPose308(),
 		13: BuildStats322(ctx, s.DB, p.UID),
 		14: proto.U32(0),
-		15: proto.U32(17), // 简中（16=英文会变英文 UI）
+		15: proto.U32(profileFlags),
 		16: proto.U32(1),
 		17: proto.StrVal(p.Email),
 		18: proto.U32(uint32(p.Role)),

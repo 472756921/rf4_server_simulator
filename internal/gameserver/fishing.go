@@ -899,9 +899,10 @@ func (s *Server) buildFish27(f *RolledFish, hookGUID, gearGuid string) *proto.Va
 	}
 	hook := hookGUID
 	if hook == "" {
-		// 线末端钩缺失时，27.f23 回退到鱼自身 GUID；
-		// 客户端用 f23 查找鱼实体所属部件。
-		hook = f.FishGUID
+		// f23 必须是可在钓组中找到且有非零强度的钩 GUID。
+		// 回退到鱼 GUID 会让客户端把钩强度算成 0，表现为力度条为空、
+		// 右键无法提杆，鱼只能被拖到岸边。
+		hook = zeroGUID
 	}
 
 	return wiregen.MustMakeObj("fgogccpglhb", map[int]*proto.Value{

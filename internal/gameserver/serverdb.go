@@ -278,9 +278,9 @@ func (s *Server) EnsurePlayer(ctx context.Context, uid int64) error {
 	return nil
 }
 
-// ensureRig 幂等建立钓组索引，并返回是否新写入竿实例尖梢。
+// ensureRig 幂等建立钓组索引，并返回是否修复了尖梢或移除了不兼容拟饵。
 // 顺序为建档、补齐尖梢、矫正非法钓组类型；尖梢必须先写，避免后续字段更新覆盖结果。
-// 调用方在尖梢新写入后应推送 4/22，让客户端在抛竿校验前拿到完整物品。
+// 调用方在返回 true 后应推送 4/22，让客户端在抛竿校验前拿到完整物品。
 func (s *Server) ensureRig(ctx context.Context, uid int64, gearGUID string) bool {
 	if s.DB == nil || gearGUID == "" {
 		return false
@@ -320,7 +320,8 @@ func (s *Server) ensureRig(ctx context.Context, uid int64, gearGUID string) bool
 	tipRepaired := s.ensureRodTip(ctx, it)
 	// 钓组类型与竿型或已装组件不兼容时进行矫正。
 	s.correctStaleRigType(ctx, gearGUID)
-	return tipRepaired
+	lureRemoved := s.sanitizeIncompatibleLureComponents(ctx, gearGUID)
+	return tipRepaired || lureRemoved
 }
 
 // sortStringsBy 按升序排序字符串集合。
