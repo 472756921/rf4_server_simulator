@@ -18,8 +18,11 @@ import (
 // 所有出站信封经 sendMu 串行化：分配推送 call_id、构造信封和发送在同一锁内完成，
 // 保证客户端看到的 call_id 严格递增，并与网关的隧道路由顺序一致。
 type Session struct {
-	// keepaliveTicks 保活循环计数，用于低频任务（船票剩余时间推送）。
+	// keepaliveTicks 保活循环计数，用于低频任务（船票清理）。
 	keepaliveTicks int64
+	// startedAt 本会话登录时刻。客户端世界时钟从登录起按 24 倍速推进，
+	// 船票倒计时的"起始游戏时间"就是按它算的。
+	startedAt time.Time
 	ID     uint64 // 网关分配的会话号
 	Token  string
 	Userid int64
@@ -47,6 +50,7 @@ func newSession(srv *Server, id uint64, token string, userid int64, c *tunnel.Co
 		Srv:    srv,
 		tunnel: c,
 		state:  map[string]any{},
+		startedAt: time.Now(),
 		stopCh: make(chan struct{}),
 		log:    srv.log.With("userid", userid, "sid", id),
 	}

@@ -193,9 +193,13 @@ func (s *Server) startTicketRent(ctx *Ctx, row *store.Item, def *store.ItemDef) 
 			changed = true
 		}
 	}
+	// oieepfcgjgn 是"租用开始时的游戏时间"（客户端世界时钟 24 倍速、从登录起算），
+	// 不是时长！客户端公式：剩余 = 票时长 + min(oieepfcgjgn, W) - W，
+	// 只有当 oieepfcgjgn 是起始游戏时间时，剩余才会随时间递减。
+	gameMin := uint64(24 * time.Since(ctx.Sess.startedAt).Minutes())
 	if idx := fieldIdxByCS(row.WireClass, "oieepfcgjgn"); idx >= 0 && idx < len(fields) {
-		if u64Of(fields[idx].Num) != minutes {
-			fields[idx].Num = ptrU64(minutes)
+		if u64Of(fields[idx].Num) != gameMin {
+			fields[idx].Num = ptrU64(gameMin)
 			changed = true
 		}
 	}
@@ -228,7 +232,11 @@ func (s *Server) startTicketRent(ctx *Ctx, row *store.Item, def *store.ItemDef) 
 	// 票的到期时间直接对齐到"现在 + 租期"：客户端提示里的"X 后过期"
 	// 就是用这个字段算的，若只延长不缩短，短租期测试会显示成票的原始时长。
 	if idx := fieldIdxByCS(row.WireClass, csUpdated); idx >= 0 && idx < len(fields) {
-		expiry := uint64(proto.WindowsFiletimeNow()) + minutes*60*10_000_000
+		realMin := minutes / 24
+		if realMin < 1 {
+			realMin = 1
+		}
+		expiry := uint64(proto.WindowsFiletimeNow()) + realMin*60*10_000_000
 		if u64Of(fields[idx].Num) != expiry {
 			fields[idx].Num = ptrU64(expiry)
 			changed = true
@@ -342,9 +350,14 @@ func (s *Session) pushTicketRemaining() {
 		}
 		start := u64Of(rent.Fields[2].Num)
 		dur := u64Of(rent.Fields[3].Num)
+		// 票时长是"游戏分钟"（24 倍速），换算成现实分钟判断是否到期。
+		realDur := dur / 24
+		if realDur < 1 {
+			realDur = 1
+		}
 		var remain uint64
-		if start+dur > nowMin {
-			remain = start + dur - nowMin
+		if start+realDur > nowMin {
+			remain = start + realDur - nowMin
 		}
 		tree, terr := s.Srv.ItemToTree(cctx, row)
 		if terr != nil {
@@ -395,7 +408,12 @@ func (s *Session) expireRentalTickets() {
 		}
 		start := u64Of(rent.Fields[2].Num)
 		dur := u64Of(rent.Fields[3].Num)
-		if start+dur > nowMin {
+		// 票时长是游戏分钟（24 倍速），换算成现实分钟。
+		realDur := dur / 24
+		if realDur < 1 {
+			realDur = 1
+		}
+		if start+realDur > nowMin {
 			continue
 		}
 		if derr := s.Srv.DB.DeleteItems(cctx, []string{g}); derr != nil {
