@@ -30,7 +30,7 @@ type AdminItemView struct {
 	CreatedTS   float64 `json:"created_ts"`
 }
 
-// AdminSkillView 技能大类熟练度。skill.points 是 0..110 的百分比熟练度，
+// AdminSkillView 技能大类熟练度。skill.points 是 0..100 的百分比熟练度，
 // 不是可分配技能点；节点等级单独存 skill_node。
 type AdminSkillView struct {
 	SkillID      int64   `json:"skill_id"`
@@ -186,8 +186,8 @@ func (d *DB) SetPlayerSkillPointsAdmin(ctx context.Context, uid, skillID int64, 
 	if points < 0 {
 		points = 0
 	}
-	if points > 110 {
-		points = 110
+	if points > maxSkillPoints {
+		points = maxSkillPoints
 	}
 	var exists int
 	if err := d.SQL.QueryRowContext(ctx,

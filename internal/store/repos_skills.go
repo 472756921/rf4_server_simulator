@@ -42,7 +42,8 @@ func (d *DB) GetSkillDef(ctx context.Context, catID, nodeID int64) (*SkillDef, e
 func (d *DB) GetSkillPoints(ctx context.Context, uid, skillID int64) (float64, error) {
 	var pts float64
 	err := d.SQL.QueryRowContext(ctx,
-		`SELECT points FROM skill WHERE uid=? AND skill_id=?`, uid, skillID).Scan(&pts)
+		`SELECT MIN(points, ?) FROM skill WHERE uid=? AND skill_id=?`,
+		maxSkillPoints, uid, skillID).Scan(&pts)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return 0, nil
