@@ -157,8 +157,8 @@ func hexOf(vals []*proto.Value) []string {
 // skillCatOrder 是技能树大类的显示顺序。
 var skillCatOrder = []int64{1, 2, 3, 10, 11, 4, 5, 6, 7, 8, 9}
 
-// profCap 熟练度合成上限（客户端两处都按 110 截断）。
-const profCap = 110.0
+// profCap 熟练度合成上限。
+const profCap = 100.0
 
 // nodeUnlocked 计算技能节点在 313.f6 中的解锁状态。
 // 客户端直接显示该值，因此服务端必须按当前熟练度判断；显式 enabled 的节点始终可用。

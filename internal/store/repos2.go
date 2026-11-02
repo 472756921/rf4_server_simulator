@@ -10,6 +10,9 @@ import (
 
 // ---- 技能 ----
 
+// maxSkillPoints 是单个技能大类的熟练度上限。
+const maxSkillPoints = 100.0
+
 // ListSkills 取玩家技能熟练度。
 func (d *DB) ListSkills(ctx context.Context, uid int64) (map[int64]float64, error) {
 	rows, err := d.SQL.QueryContext(ctx, `SELECT skill_id, points FROM skill WHERE uid=?`, uid)
@@ -24,6 +27,9 @@ func (d *DB) ListSkills(ctx context.Context, uid int64) (map[int64]float64, erro
 		if err := rows.Scan(&id, &pts); err != nil {
 			return nil, err
 		}
+		if pts > maxSkillPoints {
+			pts = maxSkillPoints
+		}
 		out[id] = pts
 	}
 	return out, rows.Err()
@@ -32,9 +38,10 @@ func (d *DB) ListSkills(ctx context.Context, uid int64) (map[int64]float64, erro
 // AddSkillPoints 增加熟练度（UPSERT 累加）。
 func (d *DB) AddSkillPoints(ctx context.Context, uid, skillID int64, delta float64) error {
 	_, err := d.SQL.ExecContext(ctx, `
-		INSERT INTO skill(uid, skill_id, points) VALUES(?,?,?)
-		ON CONFLICT (uid, skill_id) DO UPDATE SET points = points + ?`,
-		uid, skillID, delta, delta)
+		INSERT INTO skill(uid, skill_id, points) VALUES(?,?,MIN(?,?))
+		ON CONFLICT (uid, skill_id) DO UPDATE
+		SET points = MIN(points + excluded.points, ?)`,
+		uid, skillID, delta, maxSkillPoints, maxSkillPoints)
 	return err
 }
 

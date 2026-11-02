@@ -80,11 +80,11 @@ func TestAdminExtendedAPI(t *testing.T) {
 	}
 
 	if code, body = call("POST", "/api/players/skills/update", login.Token,
-		`{"uid":1000001,"skill_id":1,"points":77.5}`); code != 200 {
+		`{"uid":1000001,"skill_id":1,"points":177.5}`); code != 200 {
 		t.Fatalf("skill: %d %s", code, body)
 	}
 	pts, _ := db.GetSkillPoints(ctx, uid, 1)
-	if pts != 77.5 {
+	if pts != 100 {
 		t.Fatalf("skill points=%v", pts)
 	}
 	assertQueueContains(t, db, "refresh_skills")
