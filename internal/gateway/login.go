@@ -6,12 +6,15 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -110,9 +113,9 @@ func (s *LoginServer) Shutdown(ctx context.Context) error { return s.srv.Shutdow
 func (s *LoginServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 	loginRequests.Inc()
 	_ = r.Body.Close()
-	// 客户端登录不发送账号凭据，无法区分账号；使用配置的固定 userid，
-	// 保证同一玩家重登后档案连续。未配置时再从共享序号分配。
-	userid := s.cfg.UseridStart
+	// 客户端登录不发送账号凭据；本机固定 userid，其他来源 IP 分配独立 userid，
+	// 这样同一台机器重登档案连续，Radmin/局域网多客户端也能各自有账号。
+	userid := s.useridForRemote(r.RemoteAddr)
 	if userid <= 0 {
 		userid, _ = s.nextUserid(r.Context())
 	}
@@ -183,4 +186,53 @@ func NewLogintoken(userid int64) string {
 		strconv.FormatInt(userid, 10),
 		hex.EncodeToString(t[:]),
 	}, "|")
+}
+
+// ---- 局域网/Radmin 多账号：按来源 IP 分配 userid ----
+
+var (
+	ipUIDOnce sync.Once
+	ipUIDMu   sync.Mutex
+	ipUIDMap  = map[string]int64{}
+)
+
+func (s *LoginServer) useridForRemote(remote string) int64 {
+	host, _, err := net.SplitHostPort(remote)
+	if err != nil {
+		host = remote
+	}
+	base := s.cfg.UseridStart
+	if base <= 0 {
+		base = 1000001
+	}
+	// 本机保持原固定 UID，避免现有存档换号。
+	if host == "" || host == "127.0.0.1" || host == "::1" || host == "localhost" {
+		return base
+	}
+	ipUIDOnce.Do(func() {
+		if b, err := os.ReadFile("gateway_ip_uids.json"); err == nil {
+			_ = json.Unmarshal(b, &ipUIDMap)
+		}
+		if ipUIDMap == nil {
+			ipUIDMap = map[string]int64{}
+		}
+	})
+	ipUIDMu.Lock()
+	defer ipUIDMu.Unlock()
+	if uid, ok := ipUIDMap[host]; ok && uid > 0 {
+		return uid
+	}
+	max := base
+	for _, v := range ipUIDMap {
+		if v > max {
+			max = v
+		}
+	}
+	uid := max + 1
+	ipUIDMap[host] = uid
+	if b, err := json.MarshalIndent(ipUIDMap, "", "  "); err == nil {
+		_ = os.WriteFile("gateway_ip_uids.json", b, 0o644)
+	}
+	s.log.Info("LAN 账号分配", "ip", host, "userid", uid)
+	return uid
 }
