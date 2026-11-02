@@ -879,6 +879,12 @@ func (s *Server) rigSetComponent(ctx context.Context, uid int64, parentGUID stri
 	}
 
 	itemCat, hasCat := s.itemCategoryOf(ctx, it)
+	if itemCat == catLure && !s.rigAcceptsLureComponent(ctx, parentGUID) {
+		s.log.Warn("装配被拒：当前钓组物理类不支持拟饵", "parent", shortGUID(parentGUID),
+			"item", shortGUID(itemGUID))
+		res.Rejected = true
+		return res
+	}
 	if s.itemBrokenForMount(ctx, it) {
 		s.log.Warn("装配被拒：物品已损坏或鱼线长度耗尽", "item", shortGUID(itemGUID),
 			"durability", it.Durability, "category", itemCat)
@@ -1550,6 +1556,50 @@ func (s *Server) correctStaleRigType(ctx context.Context, rigGUID string) {
 		"row_type", rowType, "inst_type", instType, "new_type", newType)
 }
 
+// sanitizeIncompatibleLureComponents 将挂在非拟饵物理钓组上的拟饵退回背包。
+// 典型场景：Picker/Feeder/手竿钓组被错误写入 spinner，客户端没有对应
+// 拟饵物理类，会出现没有力度条、无法正常提杆。存量数据在 ensureRig 时收敛。
+func (s *Server) sanitizeIncompatibleLureComponents(ctx context.Context, rodGUID string) bool {
+	row, err := s.DB.GetItemByGUID(ctx, rodGUID)
+	if err != nil || row == nil {
+		return false
+	}
+	fields, err := FieldsFromJSON(row.FieldsJSON)
+	if err != nil {
+		return false
+	}
+	idx := fieldIdxByCS(row.WireClass, csRigObject)
+	if idx < 0 || idx >= len(fields) || fields[idx].Val == nil {
+		return false
+	}
+	name, rigType, ok := rigIdentity(fields[idx].Val)
+	if !ok || rigType <= 0 || rigTypeAcceptsLureComponent(rigType) {
+		return false
+	}
+	comps := rigCompsOf(fields[idx].Val)
+	changed := false
+	for key, comp := range comps {
+		if rigCompCategory(key) != catLure {
+			continue
+		}
+		if lureRow, ierr := s.DB.GetItemByGUID(ctx, comp.GUID); ierr == nil && lureRow != nil {
+			s.returnToBackpack(ctx, lureRow)
+		}
+		delete(comps, key)
+		changed = true
+	}
+	if !changed {
+		return false
+	}
+	depth := rigDepthOf(fields[idx].Val, defaultDepthFor(name, rigType))
+	fields[idx].Op = "VAL"
+	fields[idx].Val = buildRig153WithClip(name, rigType, comps, depth, rigClipOf(fields[idx].Val))
+	s.saveItemFields(ctx, row, fields)
+	_ = s.reconcileRigProjection(ctx, rodGUID)
+	s.log.Warn("已移除不兼容拟饵", "rod", shortGUID(rodGUID), "rig_type", rigType)
+	return true
+}
+
 // rigTypeFitsInstalledComps 判断已装组件是否都能放入当前钓组模板。
 // 未知品类和模板豁免品类不参与判断。
 func rigTypeFitsInstalledComps(rigType int64, comps map[int64]rigComp) bool {
@@ -2039,6 +2089,7 @@ func hRodTake(ctx *Ctx) ([]byte, bool) {
 	if row, err := srv.DB.GetItemByGUID(ctx.Sess.pushCtx(), gear); err != nil || row == nil || row.Durability <= 0 {
 		st.mu.Lock()
 		st.GearGuid = ""
+		st.RigType = 0
 		st.mu.Unlock()
 		ctx.Log.Info("取竿被拒：鱼竿已损坏", "rod", shortGUID(gear))
 		if body := castReady158(ctx, "", depthCM, 0); body != nil {

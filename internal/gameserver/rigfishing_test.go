@@ -226,7 +226,7 @@ func TestRodTipAutoInstall(t *testing.T) {
 }
 
 // TestLureBiteGating 验证挂载拟饵后的咬钩条件：
-// 挂载时 f23 使用已落库出厂钩 GUID，未挂载时回退到鱼自身 GUID。
+// 挂载时 f23 使用已落库出厂钩 GUID，未挂载时使用全零 GUID。
 func TestLureBiteGating(t *testing.T) {
 	db := connectTestDB(t)
 	gsAddr, srv := startGameserverWithDB(t, db)
@@ -331,7 +331,7 @@ func TestLureBiteGating(t *testing.T) {
 		t.Fatalf("14/14 f23 应=落库出厂钩 %s，实得 %s", wantStoredHook, got.Hex)
 	}
 
-	// ---- 未挂载时没有部件钩，f23 回退到鱼自身 GUID ----
+	// ---- 未挂载时没有部件钩，f23 必须是全零 GUID ----
 	if _, err := db.SQL.Exec(`DELETE FROM rig_component WHERE rig_guid=?`, rodGUID); err != nil {
 		t.Fatalf("清 rig_component: %v", err)
 	}
@@ -353,9 +353,8 @@ func TestLureBiteGating(t *testing.T) {
 	if got == wantStoredHook {
 		t.Fatal("未挂载拟饵不应再解析出出厂钩 guid")
 	}
-	wantFishGUID := fishObj.Field(0).Hex
-	if got != wantFishGUID {
-		t.Fatalf("未挂载时 f23 应回退鱼 GUID %s，实得 %s", wantFishGUID, got)
+	if got != zeroGUID {
+		t.Fatalf("未挂载时 f23 应为全零 GUID，实得 %s", got)
 	}
 	if got == rodGUID {
 		t.Fatalf("未挂载时 f23 不应回退竿 GUID %s", rodGUID)
