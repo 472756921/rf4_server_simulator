@@ -28,3 +28,5 @@ internal/wiregen/testdata/corpus.jsonl.gz
 .vscode/
 .DS_Store
 Thumbs.db
+il2csharp_full
+tools
