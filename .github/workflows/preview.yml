@@ -49,19 +49,19 @@ jobs:
           files: ${{ steps.package.outputs.asset_path }}
           prerelease: true
 
-      - name: Keep latest three preview releases
+      - name: Keep latest preview release
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const keep = 3;
+            const keep = 1;
             const releases = await github.paginate(github.rest.repos.listReleases, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               per_page: 100,
             });
             const previews = releases
-              .filter((release) => /^preview-[0-9a-f]{7}$/i.test(release.tag_name))
+              .filter((release) => release.tag_name.startsWith('preview-'))
               .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
             core.info(`Found ${previews.length} preview releases; keeping ${keep}.`);
