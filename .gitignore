@@ -29,4 +29,7 @@ internal/wiregen/testdata/corpus.jsonl.gz
 .DS_Store
 Thumbs.db
 il2csharp_full
-tools
+tools/*
+!tools/*.ps1
+!tools/*.py
+!tools/genwire/
