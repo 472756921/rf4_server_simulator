@@ -662,11 +662,10 @@ func hCast(ctx *Ctx) ([]byte, bool) {
 		st.RigType = rt
 		st.mu.Unlock()
 	}
-	if bait := srv.currentBait(ctx.Sess.pushCtx(), gear); bait != "" {
-		st.mu.Lock()
-		st.Bait = bait
-		st.mu.Unlock()
-	}
+	bait := srv.currentBait(ctx.Sess.pushCtx(), gear)
+	st.mu.Lock()
+	st.Bait = bait
+	st.mu.Unlock()
 	// 水体距离闸门：玩家离水体太远（抛投够不到）时不派鱼。
 	// 只有该地点有水体矩形数据时才判定；没有数据一律放行，避免误伤。
 	st.mu.Lock()
