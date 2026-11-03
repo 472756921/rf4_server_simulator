@@ -86,7 +86,7 @@ cat > "${RELEASE_NOTES}" <<EOF
 - 分支：main
 - Commit：${COMMIT_SHA}
 - 短 Commit ID：${SHORT_SHA}
-- 构建方式：GitHub Actions 自托管 Runner
+- 构建方式：GitHub Actions
 
 ## 包内内容
 
@@ -96,6 +96,11 @@ cat > "${RELEASE_NOTES}" <<EOF
 - certs 本地开发证书
 - README、LICENSE、docs
 - 快速开始.txt、启动服务器.cmd
+
+## 问题反馈
+
+- QQ 群：379233540
+- GitHub Issues：https://github.com/glance522/rf4_server_simulator/issues
 
 ## 最近提交
 
