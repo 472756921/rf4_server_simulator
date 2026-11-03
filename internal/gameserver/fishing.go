@@ -45,7 +45,7 @@ type FishState struct {
 	PosX         float64 // 3/9 位置同步：世界坐标 X
 	PosZ         float64 // 3/9 位置同步：世界坐标 Z
 	HasPos       bool
-	LastSkill    int64       // 本次钓鱼大类（1 浮钓 / 2 纺车）
+	LastSkill    int64       // 本次钓鱼大类（1 浮钓 / 2 纺车 / 3 底钓 / 11 海钓）
 	Armed        *RolledFish // GM 武装"下一杆必上"（唯一绕过重量上限的路径）
 	Bonus        fishingSkillBonus
 	persist      fishPersistMeta
