@@ -9,7 +9,7 @@ fi
 
 SHORT_SHA="${COMMIT_SHA:0:7}"
 VERSION="preview-${SHORT_SHA}"
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT}"
 export CGO_ENABLED=0
 
