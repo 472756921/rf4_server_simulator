@@ -7,6 +7,10 @@ log:
   level: info        # 日志级别：debug | info | warn | error
   format: text       # 日志格式：text | json
 
+launcher:
+  game_path: ""      # rf4_x64.exe 的绝对路径；也可在控制中心页面保存。
+  game_region: "CN" # 启动游戏时传给 -region 的值。
+
 sqlite:
   path: "data/rf4server.db"                  # 所有服务进程共享的主数据库。
   static_path: "server_data/static.sqlite3" # 运行时以只读方式附加的静态目录。
@@ -58,5 +62,6 @@ admin:
 # RF4_GATEWAY_LOGIN_ADDR、RF4_GATEWAY_REALTIME_ADDR、RF4_GATEWAY_ADVERTISE_HOST、
 # RF4_GATEWAY_CERT、RF4_GATEWAY_KEY、RF4_TUNNEL_ADDR、RF4_TUNNEL_PSK、
 # RF4_GAME_TUNNEL_PSK、RF4_ADMIN_HTTP_ADDR、RF4_ADMIN_JWT_SECRET、
+# RF4_GAME_CLIENT_PATH、RF4_GAME_CLIENT_REGION、
 # RF4_GATEWAY_KEEPALIVE_SEC、RF4_KEEPALIVE_INTERVAL_SEC、
 # RF4_BITE_PROBABILITY、RF4_GATEWAY_MAX_CONNS。

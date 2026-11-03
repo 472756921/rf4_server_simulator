@@ -61,6 +61,24 @@ bin\launcher.exe
 
 首次使用时，launcher 会初始化数据库，启动 `gameserver` 和 `gateway`，执行健康检查，并重启已退出的进程。管理后台 handler 直接内嵌在 launcher 中，统一入口为 `http://127.0.0.1:9500`，不再监听独立的 8080 管理端口。
 
+### 从控制中心启动游戏
+
+在统一控制中心的“运行控制”页填写 `rf4_x64.exe` 的绝对路径并保存。路径会写入当前 `config.yaml` 的：
+
+```yaml
+launcher:
+  game_path: 'D:\Games\RF4EN\Game\rf4_x64.exe'
+  game_region: "CN"
+```
+
+点击“启动游戏”后，launcher 直接执行：
+
+```text
+D:\Games\RF4EN\Game\rf4_x64.exe -region CN
+```
+
+只接受本机同源页面调用，路径必须是存在的绝对路径，且文件名为 `rf4_x64.exe`。
+
 ### 手动启动
 
 在独立终端中分别启动以下命令：

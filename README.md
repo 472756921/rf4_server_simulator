@@ -127,6 +127,7 @@
 - **系统托盘常驻**：绿=全部运行 / 黄=部分 / 红=停止；菜单可打开面板/管理后台、启停全部、退出
 - **统一控制中心** `http://127.0.0.1:9500`：状态卡片、单进程启停/重启、双路实时日志
 - **管理后台** `http://127.0.0.1:9500/#admin`：直接内嵌在 launcher 中，不单独占端口
+- **启动游戏**：在统一控制中心保存 `rf4_x64.exe` 绝对路径，点击即可执行 `rf4_x64.exe -region CN`
 
 进阶（可选命令行）：
 
@@ -177,7 +178,8 @@ make build
 - `config.example.yaml`：模板（入库）
 - `config.yaml`：实际配置（**不入库**，从模板复制后修改）
 - 静态库：`sqlite.static_path`（默认 `server_data/static.sqlite3`），运行期只读 ATTACH
-- 环境变量覆盖：`RF4_SQLITE_PATH`、`RF4_SQLITE_STATIC_PATH`、`RF4_LOG_LEVEL` 等（见 `internal/config`）
+- 游戏启动路径保存在 `launcher.game_path`，默认区域参数为 `launcher.game_region: CN`
+- 环境变量覆盖：`RF4_SQLITE_PATH`、`RF4_SQLITE_STATIC_PATH`、`RF4_LOG_LEVEL`、`RF4_GAME_CLIENT_PATH` 等（见 `internal/config`）
 
 ## 运行
 

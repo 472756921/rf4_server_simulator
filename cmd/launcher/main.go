@@ -53,6 +53,9 @@ type app struct {
 	adminSrv    *admin.Server
 	adminDB     *store.DB
 	adminErr    string
+
+	gameMu    sync.RWMutex
+	startGame func(*exec.Cmd) error
 }
 
 type logger interface {
@@ -119,6 +122,8 @@ func main() {
 	mux.HandleFunc("/api/start", app.actionHandler("start"))
 	mux.HandleFunc("/api/stop", app.actionHandler("stop"))
 	mux.HandleFunc("/api/restart", app.actionHandler("restart"))
+	mux.HandleFunc("/api/game/config", app.handleGameConfig)
+	mux.HandleFunc("/api/game/launch", app.handleGameLaunch)
 	mux.HandleFunc("/api/open-admin", func(w http.ResponseWriter, r *http.Request) {
 		openBrowser(app.panelURL + "#admin")
 		_ = r
@@ -275,12 +280,15 @@ func (a *app) handleStatus(w http.ResponseWriter, _ *http.Request) {
 	adminReady := a.adminSrv != nil
 	adminErr := a.adminErr
 	a.adminMu.RUnlock()
+	gamePath, gameRegion := a.gameState()
 	writeJSON(w, map[string]any{
 		"procs":       procs,
 		"last_error":  lastErr,
 		"admin":       "/admin/",
 		"admin_ready": adminReady,
 		"admin_error": adminErr,
+		"game_path":   gamePath,
+		"game_region": gameRegion,
 	})
 }
 
