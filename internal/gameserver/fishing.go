@@ -54,6 +54,9 @@ type FishState struct {
 
 // RolledFish 待结算/已结算的鱼。
 type RolledFish struct {
+	BaitGUIDs  string
+	BaitsKnown bool
+
 	FishGUID string
 	Species  string
 	Grade    int64
@@ -1156,7 +1159,7 @@ func (s *Server) onBiteTimer(uid int64, gen uint64) {
 		sess.Push14_14(f, hookGUID, gear)
 		return
 	}
-	if rand.Float64() >= s.biteProbabilityForLoc(st.Loc) {
+	if rand.Float64() >= s.biteProbabilityForLoc(st.Loc) || !s.canFishWithBait(s.dbCtx(), uid, st.GearGuid) {
 		// 空竿
 		st.Pending = nil
 		st.Resolved = true
@@ -1171,14 +1174,14 @@ func (s *Server) onBiteTimer(uid int64, gen uint64) {
 		st.mu.Unlock()
 		return
 	}
+	f.BaitGUIDs, f.BaitsKnown = s.biteBaitSnapshot(s.dbCtx(), st.GearGuid)
 	f.LocLevel = s.currentLevel(uid)
 	st.Pending = f
 	gear := st.GearGuid
 	st.mu.Unlock()
 
 	// f23 = 线末端钩 guid（槽 12 钩 → 路亚拟饵出厂钩回退；送错=鱼秒弃咬 f0=5）
-	hookGUID := s.mountedHookGuid(s.dbCtx(), gear)
-	sess.Push14_14(f, hookGUID, gear)
+	s.pushBaitedFish(sess, f, gear)
 }
 
 // repushPending14_14 在 14/12 f0=3 时于 6 秒后重推同一尾 pending 鱼，
@@ -1203,7 +1206,7 @@ func (s *Server) repushPending14_14(uid int64) {
 	st.PushSent = true
 	st.persist.recoverPending = false
 	st.mu.Unlock()
-	sess.Push14_14(f, s.mountedHookGuid(s.dbCtx(), gear), gear)
+	s.pushBaitedFish(sess, f, gear)
 }
 
 // bumpFishingCounter 增加玩家钓鱼计数器（escapes 等），幂等累加。
