@@ -192,6 +192,9 @@ var canonicalRigIndex = func() map[int64]int64 {
 
 // slotIndicesFor 返回指定钓组类型和品类对应的规范索引列表。
 func slotIndicesFor(rigType, category int64) []int64 {
+	if category == 27 && rigType != 0 {
+		return []int64{350, 351}
+	}
 	tpl := rigSlotTemplates[rigType]
 	if len(tpl) == 0 {
 		return nil
@@ -230,6 +233,12 @@ func canonicalIndex(category, clientIndex int64, rigType int64) int64 {
 // canonicalIndexForOrdinal 返回同品类第 ordinal 个实例的规范索引。
 // 合法客户端索引优先，否则使用模板中对应序号的槽。
 func canonicalIndexForOrdinal(category, clientIndex, rigType, ordinal int64) int64 {
+	if category == 27 {
+		if ordinal == 1 {
+			return 351
+		}
+		return 350
+	}
 	if rigType != 0 {
 		idxs := slotIndicesFor(rigType, category)
 		for _, idx := range idxs {
@@ -288,6 +297,16 @@ func rigCompsOf(f5 *proto.Value) map[int64]rigComp {
 		}
 		cat := int64(f0.U32())
 		ordinal := counts[cat]
+		if cat == 27 {
+			switch f2.U32() {
+			case 351:
+				ordinal = 1
+			case 350:
+				if _, occupied := out[rigCompKey(cat, 0)]; !occupied {
+					ordinal = 0
+				}
+			}
+		}
 		counts[cat] = ordinal + 1
 		out[rigCompKey(cat, ordinal)] = rigComp{
 			Category: cat, Ordinal: ordinal, GUID: g, Extra: int64(f2.U32()),
@@ -1096,6 +1115,14 @@ func (s *Server) rigSetTarget(ctx context.Context, parentGUID string, slot int64
 			return 0, comp.GUID
 		}
 		return 0, ""
+	}
+	// 天然饵只有显式第二饵位才组成双饵；普通换饵仍替换第一饵。
+	if slot == 27 {
+		ordinal := int64(0)
+		if extra == 351 {
+			ordinal = 1
+		}
+		return ordinal, comps[rigCompKey(slot, ordinal)].GUID
 	}
 	idxs := slotIndicesFor(s.rigTypeForWrite(ctx, parentGUID), slot)
 	if extra != 0 {
