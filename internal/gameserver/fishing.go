@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"slices"
 	"strings"
 	"time"
 
@@ -379,24 +380,24 @@ func (s *Server) rollFish(loc string, bait string) *RolledFish {
 
 // rollFishForRig 是判鱼入口：先计算当前钓组的最弱环体重上限，
 // 再对静态鱼库和内置鱼池应用该上限及奖杯幸运。
-func (s *Server) rollFishForRig(ctx context.Context, uid int64, gearGUID, loc, bait string, bonus fishingSkillBonus) *RolledFish {
+func (s *Server) rollFishForRig(ctx context.Context, uid int64, gearGUID, loc, bait string, bonus fishingSkillBonus, contexts ...fishRollContext) *RolledFish {
 	capKg, ids, weakest := s.gearWeightCapForRig(ctx, uid, gearGUID)
 	if capKg > 0 {
 		s.log.Info("钓鱼物理上限", "rod", ids.Rod, "reel", ids.Reel,
 			"line", ids.Line, "leader", ids.Leader, "weakest", weakest, "cap_kg", capKg)
 	}
-	return s.rollFishWithRules(loc, bait, capKg, bonus)
+	return s.rollFishWithRules(loc, bait, capKg, bonus, contexts...)
 }
 
-func (s *Server) rollFishWithRules(loc, bait string, gearCapKg float64, bonus fishingSkillBonus) *RolledFish {
+func (s *Server) rollFishWithRules(loc, bait string, gearCapKg float64, bonus fishingSkillBonus, contexts ...fishRollContext) *RolledFish {
 	if s.tunableF("fish_bait_rules_enabled", 0) == 1 {
 		if s.DB == nil {
 			return nil
 		}
-		return s.rollFishFromDBWithRules(loc, bait, gearCapKg, bonus)
+		return s.rollFishFromDBWithRules(loc, bait, gearCapKg, bonus, contexts...)
 	}
 	if s.DB != nil {
-		if f := s.rollFishFromDBWithRules(loc, bait, gearCapKg, bonus); f != nil {
+		if f := s.rollFishFromDBWithRules(loc, bait, gearCapKg, bonus, contexts...); f != nil {
 			return f
 		}
 	}
@@ -410,8 +411,10 @@ func (s *Server) rollFishFromDB(loc, bait string) *RolledFish {
 	return s.rollFishFromDBWithRules(loc, bait, 0, fishingSkillBonus{BiteSpeed: 1})
 }
 
-func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bonus fishingSkillBonus) *RolledFish {
+func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bonus fishingSkillBonus, contexts ...fishRollContext) *RolledFish {
+	c := rollContext(contexts)
 	strict := s.tunableF("fish_bait_rules_enabled", 0) == 1
+	distribution := s.tunableF("fish_distribution_enabled", 0) == 1
 	cctx := s.dbCtx()
 	statLoc := s.DB.ResolveStatLoc(cctx, loc)
 	if statLoc == "" {
@@ -453,7 +456,7 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 				wts[i] = ov.Weight
 				hasPositive = true
 			}
-			if !hasPositive && !strict {
+			if !hasPositive && !strict && !distribution {
 				copy(wts, base)
 				keys = keys[:len(roster)]
 				wts = wts[:len(roster)]
@@ -463,6 +466,12 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 	if strict {
 		keys, wts = s.filterFishBaits(statLoc, bait, keys, wts)
 		if len(keys) == 0 {
+			return nil
+		}
+	}
+	if distribution {
+		applyFishDistribution(loc, keys, wts, c)
+		if !slices.ContainsFunc(wts, func(w float64) bool { return w > 0 }) {
 			return nil
 		}
 	}
@@ -678,6 +687,9 @@ func (s *Server) rollFishPoolsWithRules(loc string, gearCapKg float64, bonus fis
 	pool := fishPools[loc]
 	if len(pool) == 0 {
 		pool = defaultFishPool
+	}
+	if s.tunableF("fish_distribution_enabled", 0) == 1 {
+		return nil
 	}
 	e := pool[rand.Intn(len(pool))]
 	// 三角分布（偏向 min + 30% 区间）
@@ -1163,7 +1175,7 @@ func (s *Server) onBiteTimer(uid int64, gen uint64) {
 		st.mu.Unlock()
 		return
 	}
-	f := s.rollFishForRig(s.dbCtx(), uid, st.GearGuid, st.Loc, st.Bait, st.Bonus)
+	f := s.rollFishForRig(s.dbCtx(), uid, st.GearGuid, st.Loc, st.Bait, st.Bonus, fishRollContext{x: st.PosX, z: st.PosZ, hasPos: st.HasPos, spot: st.Spot, now: now})
 	if f == nil {
 		st.PushSent = false
 		st.Pending = nil
