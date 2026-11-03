@@ -210,13 +210,17 @@ func hShortcutBind(ctx *Ctx) ([]byte, bool) {
 	if !srv.requireDB(ctx) {
 		return nil, false
 	}
-	slot, _ := ctx.ArgInt(0)
+	slot, validSlot := ctx.ArgInt(0)
 	guids := deepGUIDs(ctx.Tree)
-	g := ""
-	if len(guids) > 0 {
-		g = guids[0]
+	if !validSlot || slot > 2147483647 || len(guids) != 1 {
+		ctx.ReplyFailure("System.ArgumentException", "快捷栏绑定参数无效")
+		return nil, true
 	}
-	_ = srv.DB.BindShortcut(ctx.Sess.pushCtx(), ctx.Sess.Userid, int64(slot), g)
+	g := guids[0]
+	if err := srv.DB.BindShortcut(ctx.Sess.pushCtx(), ctx.Sess.Userid, int64(slot), g); err != nil {
+		ctx.ReplyFailure("System.ArgumentException", "快捷栏物品不可用")
+		return nil, true
+	}
 	body, err := proto.EncodeValue(build136(int64(slot), g), ctx.Sess.Table())
 	if err != nil {
 		return nil, false
@@ -229,8 +233,15 @@ func hShortcutUnbind(ctx *Ctx) ([]byte, bool) {
 	if !srv.requireDB(ctx) {
 		return nil, false
 	}
-	slot, _ := ctx.ArgInt(0)
-	_ = srv.DB.BindShortcut(ctx.Sess.pushCtx(), ctx.Sess.Userid, int64(slot), "")
+	slot, validSlot := ctx.ArgInt(0)
+	if !validSlot || slot > 2147483647 {
+		ctx.ReplyFailure("System.ArgumentException", "快捷栏解绑参数无效")
+		return nil, true
+	}
+	if err := srv.DB.BindShortcut(ctx.Sess.pushCtx(), ctx.Sess.Userid, int64(slot), ""); err != nil {
+		ctx.ReplyFailure("System.InvalidOperationException", "快捷栏解绑未保存")
+		return nil, true
+	}
 	body, err := proto.EncodeValue(build136(int64(slot), ""), ctx.Sess.Table())
 	if err != nil {
 		return nil, false
