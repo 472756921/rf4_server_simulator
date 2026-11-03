@@ -124,6 +124,7 @@ func main() {
 	mux.HandleFunc("/api/restart", app.actionHandler("restart"))
 	mux.HandleFunc("/api/game/config", app.handleGameConfig)
 	mux.HandleFunc("/api/game/launch", app.handleGameLaunch)
+	mux.HandleFunc("/api/hosts", app.handleHosts)
 	mux.HandleFunc("/api/open-admin", func(w http.ResponseWriter, r *http.Request) {
 		openBrowser(app.panelURL + "#admin")
 		_ = r
@@ -169,12 +170,27 @@ func main() {
 	go func() {
 		if err := app.sup.StartAll(); err != nil {
 			app.log.Error("进程启动失败: " + err.Error())
+			return
+		}
+		if app.cfg.Launcher.HostsSwitch {
+			if err := hostsSetLocal(hostsFilePath(), loginDomains(app.cfg)); err != nil {
+				app.log.Warn("hosts 自动切换失败（请以管理员身份运行 launcher）: " + err.Error())
+			} else {
+				app.log.Info("hosts 已指向本地服，launcher 退出时自动还原")
+			}
 		}
 	}()
 
 	// ---- 托盘常驻 ----
 	systray.Run(app.onTrayReady, func() {
 		app.sup.StopAll()
+		if app.cfg.Launcher.HostsSwitch {
+			if err := hostsRestore(hostsFilePath()); err != nil {
+				app.log.Error("hosts 还原失败: " + err.Error())
+			} else {
+				app.log.Info("hosts 已还原为官方解析")
+			}
+		}
 	})
 }
 
@@ -289,7 +305,37 @@ func (a *app) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		"admin_error": adminErr,
 		"game_path":   gamePath,
 		"game_region": gameRegion,
+		"hosts":       hostsMode(hostsFilePath()),
 	})
+}
+
+// handleHosts 面板 hosts 指向开关：GET 返回当前指向，POST ?mode=local|official 切换。
+func (a *app) handleHosts(w http.ResponseWriter, r *http.Request) {
+	path := hostsFilePath()
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, map[string]any{"mode": hostsMode(path)})
+	case http.MethodPost:
+		mode := r.URL.Query().Get("mode")
+		var err error
+		switch mode {
+		case "local":
+			err = hostsSetLocal(path, loginDomains(a.cfg))
+		case "official":
+			err = hostsRestore(path)
+		default:
+			httpError(w, "mode 必须是 local 或 official")
+			return
+		}
+		if err != nil {
+			httpError(w, "hosts 写入失败（请以管理员身份运行 launcher）: "+err.Error())
+			return
+		}
+		a.log.Info("hosts 指向已切换为 " + map[string]string{"local": "本地服务器", "official": "官方服务器"}[mode])
+		w.WriteHeader(204)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
 }
 
 func (a *app) handleLogs(w http.ResponseWriter, r *http.Request) {
