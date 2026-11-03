@@ -21,10 +21,7 @@ jobs:
     env:
       HTTP_PROXY: ${{ secrets.ACTIONS_PROXY_URL }}
       HTTPS_PROXY: ${{ secrets.ACTIONS_PROXY_URL }}
-      http_proxy: ${{ secrets.ACTIONS_PROXY_URL }}
-      https_proxy: ${{ secrets.ACTIONS_PROXY_URL }}
       NO_PROXY: localhost,127.0.0.1,::1
-      no_proxy: localhost,127.0.0.1,::1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
