@@ -76,8 +76,10 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const fmt=n=>Number(n||0).toLocaleString('zh-CN');
 const timeText=ts=>ts?new Date(Number(ts)*1000).toLocaleString('zh-CN'):'-';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const API_ROOT=location.pathname.replace(/\/+$/,'').endsWith('/admin')?'/admin/api':'/api';
+function apiURL(path){return (path==='/api'||path.startsWith('/api/'))?API_ROOT+path.slice(4):path}
 async function api(path,opt={}){
-  const r=await fetch(path,{...opt,headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN,...(opt.headers||{})}});
+  const r=await fetch(apiURL(path),{...opt,headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN,...(opt.headers||{})}});
   const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{data={raw:text}}
   if(!r.ok){if(r.status===401){logout()}throw new Error(data.error||('HTTP '+r.status))}return data;
 }

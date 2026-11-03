@@ -1,6 +1,6 @@
 # 管理控制台
 
-管理控制台内嵌于 `admin` 可执行文件，默认通过 `http://127.0.0.1:8080` 提供访问。控制台使用 `config.yaml` 中的管理员凭据进行认证；登录成功后返回 JWT，供控制台和 API 使用。
+管理控制台直接内嵌在 `launcher` 中，通过统一控制中心 `http://127.0.0.1:9500` 的“管理后台”页签进入，不再监听独立的 `8080` 端口。admin 的 HTTP handler 挂载在 `/admin/`，前端 API 使用 `/admin/api/*`；内部 handler 仍保持 `/api/*` 路由，便于测试和独立调试。控制台使用 `config.yaml` 中的管理员凭据进行认证；登录成功后返回 JWT，供控制台和 API 使用。
 
 该界面可以修改玩家数据、发放物品、调整经济配置以及管理会话。请仅在可信网络接口上开放。
 
@@ -48,7 +48,7 @@
 
 ## API
 
-除 `POST /api/login` 外，其他请求均需将 JWT 作为 bearer token 提交。
+统一入口下，以下路径均增加 `/admin` 前缀，例如登录为 `POST /admin/api/login`。除登录外，其他请求均需将 JWT 作为 bearer token 提交。独立调试 `cmd/admin` 时仍直接使用 `/api/*`。
 
 ```text
 POST /api/login

@@ -24,7 +24,7 @@ type Config struct {
 	Admin   Admin   `yaml:"admin"`
 }
 
-// SQLite 本地单文件数据库（三进程共享，WAL 并发）。
+// SQLite 本地单文件数据库（多进程共享，WAL 并发）。
 type SQLite struct {
 	Path       string `yaml:"path"`        // 主库，例如 data/rf4server.db
 	StaticPath string `yaml:"static_path"` // 只读静态配置库，例如 server_data/static.sqlite3
@@ -85,7 +85,7 @@ func (g *Game) KeepaliveInterval() time.Duration {
 }
 
 type Admin struct {
-	HTTPAddr  string `yaml:"http_addr"` // 管理后台监听，如 :8080
+	HTTPAddr  string `yaml:"http_addr"` // 仅 cmd/admin 独立调试监听，如 :8080
 	JWTSecret string `yaml:"jwt_secret"`
 	ObsAddr   string `yaml:"obs_addr"`
 	Username  string `yaml:"username"` // 管理员账号（以配置为准，启动时同步）
