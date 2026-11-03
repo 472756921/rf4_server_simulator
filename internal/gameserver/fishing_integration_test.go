@@ -131,29 +131,8 @@ func TestFishingLoopFull(t *testing.T) {
 		t.Fatalf("14/2 应回 800")
 	}
 
-	// 14/7 钓组入水。真实客户端只有钓组真在水里时才逐帧上报，
-	// 服务端也据此才派鱼；这里按 1.5 秒一帧持续上报，直到收到咬钩推送。
-	tickTree := proto.Args524(wiregen.MustMakeObj("lobemkloehp", map[int]*proto.Value{
-		5: proto.U32(0x200),
-		6: proto.StrVal("loc1_02"),
-	}))
-	tickBody, terr := proto.EncodeValue(tickTree, table)
-	if terr != nil {
-		t.Fatalf("构造 14/7 失败: %v", terr)
-	}
-
 	// 等 14/14 判鱼推送（咬钩延迟 6-35s；上限 45s）
-	var fish14 *proto.Envelope
-	deadline := time.Now().Add(45 * time.Second)
-	sendID := uint32(203)
-	for time.Now().Before(deadline) {
-		fc.SendRequest(sendID, 14, 7, tickBody...)
-		sendID++
-		if p := waitPushCmd(t, fc, 14, 14, 1500*time.Millisecond); p != nil {
-			fish14 = p
-			break
-		}
-	}
+	fish14 := waitPushCmd(t, fc, 14, 14, 45*time.Second)
 	if fish14 == nil {
 		t.Fatal("未收到 14/14")
 	}

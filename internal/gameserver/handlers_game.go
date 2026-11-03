@@ -768,26 +768,7 @@ func hFishingStep(ctx *Ctx) ([]byte, bool) {
 			}
 			changed := anim != st.LastAnim
 			st.LastAnim = anim
-			// 首个 14/7 = 客户端确认钓组已落进水里。真服也只在入水后出鱼，
-			// 所以岸上抛竿（永远不会有 14/7）不该派鱼；如果到点时还没入水，
-			// onBiteTimer 会挂起，这里补排一次。
-			enterWater := false
-			needBite := false
-			if st.CastActive && !st.InWater {
-				st.InWater = true
-				enterWater = true
-				if st.NeedBite {
-					st.NeedBite = false
-					needBite = true
-				}
-			}
 			st.mu.Unlock()
-			if needBite {
-				ctx.Log.Info("钓组入水(14/7)，补排咬钩", "seq", seq)
-				ctx.Sess.Srv.scheduleBiteForHooked(ctx.Sess, st)
-			} else if enterWater {
-				ctx.Log.Info("钓组入水(14/7)", "seq", seq)
-			}
 			// 14/7 每帧都会发送，仅在动画位变化时记录日志。
 			if changed {
 				ctx.Log.Info("14/7 钓组动画位", "f5", fmt.Sprintf("0x%X", anim))
@@ -905,12 +886,6 @@ func hFishingLoad(ctx *Ctx) ([]byte, bool) {
 // hFishingEnd 处理 14/4 收竿结算。
 // 结算由 progress_ops.go 的 fishingEndSettle 完成，包括经验、Premium 加成和等级更新。
 func hFishingEnd(ctx *Ctx) ([]byte, bool) {
-	// 收竿：钓组离开水面，挂起状态一并清掉。
-	st := ctx.Sess.Srv.stateFor(ctx.Sess.Userid)
-	st.mu.Lock()
-	st.InWater = false
-	st.NeedBite = false
-	st.mu.Unlock()
 	body, ok := ctx.Sess.Srv.fishingEndSettle(ctx)
 	ctx.Log.Info("14/4 收竿", "handled", ok, "bytes", len(body))
 	return body, ok
