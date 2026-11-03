@@ -15,4 +15,7 @@ foreach ($cmd in @("gateway", "gameserver", "seed")) {
 go build -trimpath -ldflags "$ldflags -H=windowsgui" -o "bin/launcher.exe" "./cmd/launcher"
 if ($LASTEXITCODE -ne 0) { throw "build launcher failed" }
 Write-Host "build bin/launcher.exe ok"
+
+# 新架构不再生成 admin.exe；清理旧版本遗留，避免误启动独立管理端口。
+Remove-Item -LiteralPath "bin/admin.exe" -Force -ErrorAction SilentlyContinue
 Write-Host "done -> bin/"

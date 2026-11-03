@@ -14,6 +14,7 @@ build:
 	@for c in $(CMDS); do \
 		$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN)/$$c.exe ./cmd/$$c || exit 1; \
 	done
+	@rm -f $(BIN)/admin.exe
 	@echo "build -> $(BIN)/"
 
 test: vet

@@ -109,6 +109,11 @@ $(git log -20 --format='- @%h %s')
 EOF
 cp "${RELEASE_NOTES}" "${STAGE}/发布说明.md"
 
+if [[ -e "${STAGE}/bin/admin.exe" ]]; then
+  echo "refusing to package standalone admin.exe; admin is embedded in launcher" >&2
+  exit 1
+fi
+
 if find "${STAGE}" -type f \( -name 'rf4server.db' -o -name '*.db-wal' -o -name '*.db-shm' \) | grep -q .; then
   echo "refusing to package runtime save files" >&2
   exit 1

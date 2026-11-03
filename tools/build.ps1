@@ -28,6 +28,10 @@ $version = Get-Date -Format 'yyyyMMddHHmmss'
 $ld = "-s -w -X 'rf4server/internal/buildinfo.Version=$version'"
 $targets = if ($Target -eq 'all') { @('gateway', 'gameserver', 'seed') } else { @($Target) }
 
+if ($Target -eq 'all' -and (Test-Path 'bin/admin.exe')) {
+    Remove-Item -LiteralPath 'bin/admin.exe' -Force
+}
+
 foreach ($t in $targets) {
     $out = "bin/$t.exe"
     & $go build -trimpath -ldflags $ld -o $out "./cmd/$t"
