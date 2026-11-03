@@ -54,6 +54,8 @@ var categoryWireClass = map[int64]wireClassEntry{
 	37: {"gfkbfjgkjoh", 116},
 	39: {"bplepbfgpmk", 162},
 	40: {"dbojlbebaca", 143},
+	41: {"jceogpbfpjh", 163}, // 工坊工具；定义类型 12056 夹在票据实例 162 与露营灯 164 之间
+	42: {"nacllfpgomk", 142}, // 工坊材料，可堆叠；定义类型 12026 夹在拟饵 141 与地图 143 之间
 	44: {"fcdgfdomnjm", 160}, // Sbirolino
 	46: {"cilmgoaoofg", 120}, // 成品窝料
 	48: {"npnkhkicfkg", 613}, // 渔轮导线环
@@ -764,6 +766,85 @@ func NewItemGUID() string {
 func netTicksNow() int64 {
 	// 100ns ticks；必须保留亚秒，f22 依赖严格单调的版本戳。
 	return time.Now().UnixNano()/100 + 621_355_968_000_000_000
+}
+
+// reclassifyStoredItem 把误落成钓线类的物品改写成该类别自己的实例类。
+// 已经买进背包的工坊工具和材料靠这一步恢复图标，不必扔掉重买。
+// guid、容器、数量、耐久和工艺保持不变。类别已经对上，或不是钓线回退类时不改。
+func (s *Server) reclassifyStoredItem(ctx context.Context, it *store.Item, def *store.ItemDef) (bool, error) {
+	if it == nil || def == nil {
+		return false, nil
+	}
+	cls, ok := categoryWireClass[def.Category]
+	if !ok || (it.WireClass == cls.Class && it.TypeID == cls.TypeID) {
+		return false, nil
+	}
+	if it.WireClass != "" && it.WireClass != fallbackWireClass {
+		return false, nil
+	}
+	obj, err := wiregen.MakeObj(cls.Class, nil)
+	if err != nil {
+		return false, err
+	}
+	s.applyDefAttrs(def, cls.Class, obj)
+	setHex := func(cs, v string) {
+		if idx := fieldIdxByCS(cls.Class, cs); idx >= 0 {
+			obj.Fields[idx].Hex = v
+		}
+	}
+	setNum := func(cs string, v uint64) {
+		if idx := fieldIdxByCS(cls.Class, cs); idx >= 0 {
+			obj.Fields[idx].Num = ptrU64(v)
+		}
+	}
+	setHex(csGUID, it.GUID)
+	setNum(csNumericID, uint64(def.NumericID))
+	rowQty := it.Qty
+	if rowQty < 1 {
+		rowQty = 1
+	}
+	if countableCategories[def.Category] {
+		if idx := fieldIdxByCS(cls.Class, csQty); idx >= 0 {
+			obj.Fields[idx].Num = ptrU64(uint64(rowQty))
+		}
+	}
+	workmanship := it.Workmanship
+	if workmanship <= 0 {
+		workmanship = 1
+	}
+	durability := it.Durability
+	if durability <= 0 {
+		durability = 1
+	}
+	s.materializeInto(ctx, cls.Class, def, obj, it.GUID, workmanship, durability)
+	if idx := fieldIdxByCS(cls.Class, csCreated); idx >= 0 && u64Of(obj.Fields[idx].Num) == 0 {
+		obj.Fields[idx].Num = ptrU64(uint64(netTicksNow()))
+	}
+	if idx := fieldIdxByCS(cls.Class, csUpdated); idx >= 0 && u64Of(obj.Fields[idx].Num) == 0 {
+		obj.Fields[idx].Num = ptrU64(uint64(proto.WindowsFiletimeNow()))
+	}
+	if idx := fieldIdxByCS(cls.Class, csStateEnum); idx >= 0 {
+		st := u64Of(obj.Fields[idx].Num)
+		if defBits, ok := defAttrU64(def, "hgaijieklek"); ok {
+			st = defBits
+		}
+		obj.Fields[idx].Num = ptrU64(st)
+	}
+	it.WireClass = cls.Class
+	it.TypeID = cls.TypeID
+	it.Qty = rowQty
+	it.Workmanship = workmanship
+	it.Durability = durability
+	s.canonicalizeItemPhysicalFields(ctx, it, obj.Fields)
+	fieldsJSON, err := FieldsToJSON(obj.Fields)
+	if err != nil {
+		return false, err
+	}
+	it.FieldsJSON = fieldsJSON
+	if err := s.DB.UpdateItemWire(ctx, it.GUID, cls.Class, cls.TypeID, fieldsJSON, rowQty); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // CreateItem 按 itemID 创建新实例并入包，返回数据库行。
