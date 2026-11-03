@@ -174,7 +174,8 @@ func main() {
 		}
 		if app.cfg.Launcher.HostsSwitch {
 			if err := hostsSetLocal(hostsFilePath(), loginDomains(app.cfg)); err != nil {
-				app.log.Warn("hosts 自动切换失败（请以管理员身份运行 launcher）: " + err.Error())
+				app.log.Warn("hosts 自动切换失败（请以管理员身份运行 launcher）: " + err.Error() +
+					"；可手动将 api.rf4game.ru/com 指向 127.0.0.1，或以管理员 PowerShell 运行 tools/hosts.ps1 local")
 			} else {
 				app.log.Info("hosts 已指向本地服，launcher 退出时自动还原")
 			}
@@ -186,7 +187,8 @@ func main() {
 		app.sup.StopAll()
 		if app.cfg.Launcher.HostsSwitch {
 			if err := hostsRestore(hostsFilePath()); err != nil {
-				app.log.Error("hosts 还原失败: " + err.Error())
+				app.log.Error("hosts 还原失败: " + err.Error() +
+					"；hosts 仍指向本地服，如需回官服请手动删除 hosts 中的 rf4s-local 行，或以管理员 PowerShell 运行 tools/hosts.ps1 official")
 			} else {
 				app.log.Info("hosts 已还原为官方解析")
 			}
@@ -328,7 +330,8 @@ func (a *app) handleHosts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err != nil {
-			httpError(w, "hosts 写入失败（请以管理员身份运行 launcher）: "+err.Error())
+			httpError(w, "hosts 写入失败（请以管理员身份运行 launcher）: "+err.Error()+
+				"；可手动将 api.rf4game.ru/com 指向 127.0.0.1，或以管理员 PowerShell 运行 tools/hosts.ps1 local")
 			return
 		}
 		a.log.Info("hosts 指向已切换为 " + map[string]string{"local": "本地服务器", "official": "官方服务器"}[mode])
