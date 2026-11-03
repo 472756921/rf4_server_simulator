@@ -22,6 +22,8 @@ jobs:
       HTTP_PROXY: ${{ secrets.ACTIONS_PROXY_URL }}
       HTTPS_PROXY: ${{ secrets.ACTIONS_PROXY_URL }}
       NO_PROXY: localhost,127.0.0.1,::1
+      GOPROXY: https://goproxy.cn,direct
+      GOSUMDB: sum.golang.org
     steps:
       - name: Checkout
         uses: actions/checkout@v4
