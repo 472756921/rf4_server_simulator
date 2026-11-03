@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build the preview package without publishing a release
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -46,7 +52,18 @@ jobs:
         id: package
         run: bash .github/scripts/build-preview.sh "$GITHUB_SHA"
 
+      - name: Upload dry-run artifact
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.version }}
+          path: |
+            ${{ steps.package.outputs.asset_path }}
+            ${{ steps.package.outputs.release_notes }}
+          if-no-files-found: error
+
       - name: Publish preview release
+        if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.package.outputs.version }}
@@ -56,6 +73,7 @@ jobs:
           prerelease: true
 
       - name: Keep latest three preview releases
+        if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
