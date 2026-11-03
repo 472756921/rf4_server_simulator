@@ -24,6 +24,8 @@ type FishState struct {
 	Spot         uint64
 	DepthCM      int64 // 玩家设钓深（17/12 记入；14/1 的 158.f2 透传用）
 	CastActive   bool
+	InWater      bool // 14/7 动画位出现 0x400（钓组在水中）
+	NeedBite     bool // 到点时还没入水，挂起等 0x400 再派鱼
 	CastTs       time.Time
 	FallTs       time.Time
 	FallSeen     bool
@@ -40,6 +42,9 @@ type FishState struct {
 	BiteAt       time.Time     // 原定咬钩绝对时刻；硬重启后据此恢复 timer
 	Keepnet      []*RolledFish // 回退缓存（DB 权威）
 	Bait         string
+	PosX         float64 // 3/9 位置同步：世界坐标 X
+	PosZ         float64 // 3/9 位置同步：世界坐标 Z
+	HasPos       bool
 	LastSkill    int64       // 本次钓鱼大类（1 浮钓 / 2 纺车）
 	Armed        *RolledFish // GM 武装"下一杆必上"（唯一绕过重量上限的路径）
 	Bonus        fishingSkillBonus
@@ -76,6 +81,10 @@ func (s *Server) stateFor(uid int64) *FishState {
 // ---- 钓组动画就位位族 ----
 // 0x200 水层静止（浮标）、0x800 底部静止（沉底/Feeder）、0x1000 水面静止。
 const rigAnimSettledMask = 0x200 | 0x800 | 0x1000
+
+// rigAnimInWaterMask 是“钓组在水中”的位。实测：朝水里抛竿几秒后出现 0x400，
+// 朝岸上抛竿一直只有 0x0，可用于把“饵扔在陆地”的抛竿挡在出鱼之前。
+const rigAnimInWaterMask = 0x400
 
 // ---- 咬钩延迟 ----
 
@@ -983,6 +992,11 @@ func (s *Server) scheduleBiteState(sess *Session, st *FishState, preserveHooked,
 	if resetCast || st.CastTs.IsZero() {
 		st.CastTs = now
 	}
+	if resetCast {
+		// 新的一杆：还没确认在水中，等 14/7 的 0x400。
+		st.InWater = false
+		st.NeedBite = false
+	}
 	st.Bonus = bonus
 	delay := s.biteDelay(st, bonus)
 	st.BiteAt = now.Add(time.Duration(delay * float64(time.Second)))
@@ -1007,6 +1021,18 @@ func (s *Server) onBiteTimer(uid int64) {
 		return
 	}
 	if !st.CastActive || st.Resolved || st.PushSent {
+		st.mu.Unlock()
+		return
+	}
+	if st.Pending != nil {
+		// 钩上已经有鱼（或刚要结算），不能再判一条：否则会把 Pending 覆盖掉，
+		// 客户端还在溜旧鱼，结算却按新鱼算。
+		st.mu.Unlock()
+		return
+	}
+	if !st.InWater {
+		// 还没等到 14/7 的“在水中”动画位：先挂起，等它出现再派鱼。
+		st.NeedBite = true
 		st.mu.Unlock()
 		return
 	}
