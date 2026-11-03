@@ -24,6 +24,8 @@ type FishState struct {
 	Spot         uint64
 	DepthCM      int64 // 玩家设钓深（17/12 记入；14/1 的 158.f2 透传用）
 	CastActive   bool
+	InWater      bool // 收到过 14/7（钓组确实落到水里）
+	NeedBite     bool // 到点时还没入水，挂起等首个 14/7 再派鱼
 	CastTs       time.Time
 	FallTs       time.Time
 	FallSeen     bool
@@ -983,6 +985,11 @@ func (s *Server) scheduleBiteState(sess *Session, st *FishState, preserveHooked,
 	if resetCast || st.CastTs.IsZero() {
 		st.CastTs = now
 	}
+	if resetCast {
+		// 新的一杆：先认为还没入水，等客户端 14/7 确认。
+		st.InWater = false
+		st.NeedBite = false
+	}
 	st.Bonus = bonus
 	delay := s.biteDelay(st, bonus)
 	st.BiteAt = now.Add(time.Duration(delay * float64(time.Second)))
@@ -1007,6 +1014,13 @@ func (s *Server) onBiteTimer(uid int64) {
 		return
 	}
 	if !st.CastActive || st.Resolved || st.PushSent {
+		st.mu.Unlock()
+		return
+	}
+	if !st.InWater {
+		// 还没收到过 14/7：说明钓组没落进水里（扔在岸上）。
+		// 挂起等待；真入水时 hFishingStep 会补排一次。
+		st.NeedBite = true
 		st.mu.Unlock()
 		return
 	}
