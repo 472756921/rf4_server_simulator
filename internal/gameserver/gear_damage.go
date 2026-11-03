@@ -39,7 +39,7 @@ type gearBreakOutcome struct {
 // 路亚也在其中：线断后拟饵、钩、前导和饵都不可能留在竿上。
 var lineBreakTerminalCategories = map[int64]bool{
 	catHook: true, catLead: true, catLeaderLock: true, catWireLeader: true,
-	catLure: true, catBait: true,
+	catLure: true, catBait: true, catFloat: true,
 }
 
 // sourceLineCategories 包含主线及前导/钢丝前导。断任何一项都按断线处理。
@@ -319,7 +319,7 @@ func (s *Server) breakLineTx(ctx context.Context, uid int64, rodGUID, brokenGUID
 	depth := rigDepthOf(stored, defaultDepthFor(name, rigType))
 	if idx := fieldIdxByCS(rod.WireClass, csRigObject); idx >= 0 && idx < len(rodFields) {
 		rodFields[idx].Op = "VAL"
-		rodFields[idx].Val = buildRig153(name, rigType, comps, depth)
+		rodFields[idx].Val = buildRig153WithClip(name, rigType, comps, depth, rigClipOf(stored))
 	}
 	if err := updateItemFieldsTx(ctx, s.DB, tx, rod, rodFields); err != nil {
 		return nil, err

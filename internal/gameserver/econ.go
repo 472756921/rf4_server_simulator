@@ -77,6 +77,7 @@ func (s *Server) fishingEnd(ctx *Ctx) ([]byte, bool) {
 	st.CastActive = false
 	pending := st.Pending
 	hooked := st.Hooked
+	rigType := st.RigType
 	st.mu.Unlock()
 
 	cctx := ctx.Sess.pushCtx()
@@ -131,7 +132,7 @@ func (s *Server) fishingEnd(ctx *Ctx) ([]byte, bool) {
 	}
 	obj801, err := wiregen.MakeObj("caagocpofin", map[int]*proto.Value{
 		0:  f0,
-		1:  proto.U32(f32Const1F1),
+		1:  proto.U32(castBaseDistanceBits(rigType)),
 		2:  proto.U32(f32Const801F2),
 		3:  build5003(),
 		4:  proto.Null(),
@@ -177,7 +178,7 @@ func (s *Server) build813(ctx context.Context, uid int64, f *RolledFish, prevBes
 
 	obj310 := wiregen.MustMakeObj("kegeppimjbm", map[int]*proto.Value{
 		0: proto.U64(uint64(f.XP)), // 单鱼经验（不是累计）
-		1: proto.U32(0),
+		1: proto.U32(personalRecordFlag(prevBest <= 0 || f.WeightG > prevBest)),
 		2: proto.U32(uint32(stLastSkill(s, uid))),
 		3: proto.F32(0.2),
 		4: proto.Null(),

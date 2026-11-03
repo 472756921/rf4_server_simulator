@@ -337,3 +337,45 @@ func TestLineBreakExhaustsAndDeletesLine(t *testing.T) {
 		t.Fatalf("长度耗尽应记录 line_break 和 line_exhausted: %+v", seen)
 	}
 }
+
+func TestBrokenHandRodDeletesFloat(t *testing.T) {
+	srv, db := newRigTestServer(t)
+	ctx := context.Background()
+	const uid = int64(1000001)
+
+	rod, err := srv.CreateItem(ctx, uid, "tele_10012_tl16", "backpack", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line, err := srv.CreateItem(ctx, uid, "mono_40853", "backpack", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bobber, err := srv.CreateItem(ctx, uid, "bob_25001", "backpack", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := newProbeSess(srv)
+	mountGearForTest(t, srv, sess, rod.GUID, line.GUID)
+	mountGearForTest(t, srv, sess, rod.GUID, bobber.GUID)
+	comps := rigSlotGUIDs(t, srv, rod.GUID)
+	if comps[catFloat] != bobber.GUID {
+		t.Fatalf("手竿浮漂未装配: slot28=%s，期望 %s", comps[catFloat], bobber.GUID)
+	}
+
+	tree := rigRequestTree(t, proto.Guid(rod.GUID), proto.Guid(line.GUID), proto.U32(2), proto.Null())
+	if _, ok := hDynamicRodBreak(&Ctx{Sess: sess, Main: 17, Sub: 9, Tree: tree,
+		DecodeOK: true, ExpectResponse: true, Log: logging.Discard()}); !ok {
+		t.Fatal("17/9 手竿断线未处理")
+	}
+	if row, _ := db.GetItemByGUID(ctx, bobber.GUID); row != nil {
+		t.Fatal("手竿断线后浮漂应被删除")
+	}
+	if got := rigSlotGUIDs(t, srv, rod.GUID); got[catFloat] != "" {
+		t.Fatalf("手竿断线后 rig_component 仍残留浮漂: %s", got[catFloat])
+	}
+	freshRod := mustItem(t, db, rod.GUID)
+	if _, ok := rigCompsOf(rigStoredF5(t, freshRod))[catFloat]; ok {
+		t.Fatal("手竿断线后竿 f5 仍残留浮漂")
+	}
+}

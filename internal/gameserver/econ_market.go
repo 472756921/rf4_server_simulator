@@ -37,6 +37,7 @@ func registerEconMarket(d *Dispatch) {
 	d.Register(21, 3, hWorkshopOrder) // 官方语义：订购/更换零件（含修理）
 	d.Register(21, 4, hWorkshopOrder) // 官方金币通道同样是换件结构
 	d.Register(17, 12, hRodSetDepth)
+	d.Register(17, 13, hRodSetClip)
 }
 
 // ---------------------------------------------------------------------------
@@ -1731,12 +1732,64 @@ func hRodSetDepth(ctx *Ctx) ([]byte, bool) {
 	return nil, true
 }
 
+// hRodSetClip 17/13（fire-and-forget）：记录轮管卡米数，0 表示关闭。
+func hRodSetClip(ctx *Ctx) ([]byte, bool) {
+	srv := ctx.Sess.Srv
+	rodGUID, clipM := parseRodGuidInt(ctx.Tree)
+	if rodGUID == "" {
+		return nil, true
+	}
+	clipM = clampReelClipM(clipM)
+	ctx.Log.Info("17/13 设置轮管卡", "竿", shortGUID(rodGUID), "卡米", clipM)
+	if srv.DB != nil {
+		_ = srv.DB.UpsertRodSetting(ctx.Sess.pushCtx(), rodGUID, reelClipSettingKey, strconv.FormatInt(clipM, 10))
+		if !srv.rodRigSetClip(ctx.Sess.pushCtx(), rodGUID, clipM) {
+			ctx.Log.Info("17/13 竿实例无钓组字段，仅记竿设置", "竿", shortGUID(rodGUID))
+		}
+	}
+	return nil, true
+}
+
+// rodRigSetClip 更新竿实例 153.f5 的轮管卡米数，保留其他钓组状态。
+func (s *Server) rodRigSetClip(ctx context.Context, rodGUID string, clipM int64) bool {
+	row, err := s.DB.GetItemByGUID(ctx, rodGUID)
+	if err != nil || row == nil {
+		return false
+	}
+	fields, err := FieldsFromJSON(row.FieldsJSON)
+	if err != nil {
+		return false
+	}
+	idx := fieldIdxByCS(row.WireClass, csRigObject)
+	if idx < 0 || idx >= len(fields) {
+		return false
+	}
+	stored := fields[idx].Val
+	if stored == nil || stored.Kind != proto.KindObj {
+		stored = nil
+	}
+	comps := rigCompsOf(stored)
+	name, curType, ok := rigIdentity(stored)
+	if !ok {
+		curType = s.defaultRigTypeForRod(ctx, row.ItemID)
+		if name == "" {
+			name = rigNameForType(curType)
+		}
+	}
+	depth := rigDepthOf(stored, defaultDepthFor(name, curType))
+	fields[idx].Op = "VAL"
+	fields[idx].Val = buildRig153WithClip(name, curType, comps, depth, clipM)
+	s.saveItemFields(ctx, row, fields)
+	return true
+}
+
 // parseSetDepth 异构混合扫描（guid/u32 顺序敏感；17_12.py 的 raw_all 逃生舱）：
 // 顶层第一个 guid = 竿，第一个 u32/i32 = 深度 cm。
-func parseSetDepth(tree *proto.Value) (rodGUID string, depthCM int64) {
+func parseRodGuidInt(tree *proto.Value) (rodGUID string, value int64) {
 	if tree == nil || tree.Kind != proto.KindArgs {
 		return
 	}
+	gotInt := false
 	for _, it := range tree.Items {
 		if it == nil {
 			continue
@@ -1747,12 +1800,17 @@ func parseSetDepth(tree *proto.Value) (rodGUID string, depthCM int64) {
 				rodGUID = it.Hex
 			}
 		case proto.KindU32, proto.KindU64:
-			if depthCM == 0 {
-				depthCM = int64(it.Num)
+			if !gotInt {
+				value = int64(it.Num)
+				gotInt = true
 			}
 		}
 	}
 	return
+}
+
+func parseSetDepth(tree *proto.Value) (rodGUID string, depthCM int64) {
+	return parseRodGuidInt(tree)
 }
 
 // rodRigSetDepth 设置竿实例 f5 的钓棚深度（厘米）并落库。
@@ -1783,7 +1841,7 @@ func (s *Server) rodRigSetDepth(ctx context.Context, rodGUID string, depthCM int
 		}
 	}
 	fields[idx].Op = "VAL"
-	fields[idx].Val = buildRig153(name, curType, comps, depthCM)
+	fields[idx].Val = buildRig153WithClip(name, curType, comps, depthCM, rigClipOf(stored))
 	s.saveItemFields(ctx, row, fields)
 	return true
 }
