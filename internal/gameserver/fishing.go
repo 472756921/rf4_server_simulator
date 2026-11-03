@@ -510,8 +510,9 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 			w = 1
 		}
 	}
-	// 有可信装备数据时，将重量限制在钓组上限内；gearCapKg<=0 时不设额外上限。
-	if gearCapKg > 0 {
+	// 鱼重钓具上限开关：1=鱼重超过钓组承重上限时截断（原版行为，默认）；
+	// 0=不截断，鱼体重倍率可完整生效（需管理员显式设置）。
+	if gearCapKg > 0 && s.tunableF("fish_weight_cap", 1) > 0 {
 		w = capWeightGrams(w, int64(gearCapKg*1000))
 	}
 	grade := s.rollGradeDB(cctx, key, w)
@@ -686,11 +687,13 @@ func (s *Server) rollFishPoolsWithRules(loc string, gearCapKg float64, bonus fis
 	if k := s.tunableF("fish_weight_scale", 1.0); k > 0 && k != 1.0 {
 		w *= k
 	}
-	// 有装备物理数据时使用动态上限；缺少可信数据时使用内置上限，
-	// 并按 fight_tolerance 放宽。
-	cap := poolWeightCapG(gearCapKg, bonus.FightTolerance)
-	if cap > 0 && w > cap {
-		w = cap
+	// 鱼重钓具上限开关（fish_weight_cap）：1=按装备/内置上限截断
+	//（含 fight_tolerance 放宽，原版行为，默认）；0=不截断，倍率可完整生效。
+	if s.tunableF("fish_weight_cap", 1) > 0 {
+		cap := poolWeightCapG(gearCapKg, bonus.FightTolerance)
+		if cap > 0 && w > cap {
+			w = cap
+		}
 	}
 	weightG := int64(math.Round(w))
 	if weightG < 1 {
