@@ -40,9 +40,6 @@ type FishState struct {
 	BiteAt       time.Time     // 原定咬钩绝对时刻；硬重启后据此恢复 timer
 	Keepnet      []*RolledFish // 回退缓存（DB 权威）
 	Bait         string
-	PosX         float64 // 3/9 位置同步：世界坐标 X
-	PosZ         float64 // 3/9 位置同步：世界坐标 Z
-	HasPos       bool
 	LastSkill    int64       // 本次钓鱼大类（1 浮钓 / 2 纺车）
 	Armed        *RolledFish // GM 武装"下一杆必上"（唯一绕过重量上限的路径）
 	Bonus        fishingSkillBonus

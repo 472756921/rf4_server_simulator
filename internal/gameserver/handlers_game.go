@@ -667,32 +667,7 @@ func hCast(ctx *Ctx) ([]byte, bool) {
 		st.Bait = bait
 		st.mu.Unlock()
 	}
-	// 水体判定：玩家离水体太远（超过抛投可达距离）时不安排咬钩。
-	st.mu.Lock()
-	hasPos, px, pz, locNow := st.HasPos, st.PosX, st.PosZ, st.Loc
-	st.mu.Unlock()
-	reach := 12.0 // 基础抛投 7.5m + 余量
-	nearWater, hasData := waterWithin(locNow, px, pz, reach)
-	// 实测 WaterBounds 矩形并不覆盖可垂钓水域（玩家在岸边施钓点距最近矩形约 28m），
-	// 因此先停用拒竿闸门，只保留位置距离诊断日志。
-	if hasPos && hasData {
-		ctx.Log.Info("抛竿水体诊断", "loc", locNow, "x", px, "z", pz, "near", nearWater)
-	}
-	if false {
-		ctx.Log.Info("抛竿位置距水体过远，不安排咬钩", "loc", locNow, "x", px, "z", pz, "reach", reach)
-		// 取消上一杆遗留的咬钩计时，避免拒了本杆却推送旧一杆的鱼。
-		st.mu.Lock()
-		if st.biteTimer != nil {
-			st.biteTimer.Stop()
-			st.biteTimer = nil
-		}
-		st.CastActive = false
-		st.Pending = nil
-		st.Hooked = false
-		st.mu.Unlock()
-	} else {
-		srv.scheduleBite(ctx.Sess, st)
-	}
+	srv.scheduleBite(ctx.Sess, st)
 
 	// 响应 800.f0 返回当前钓组 157 对象，包含完整竿树和重建后的 f5。
 	cctx := ctx.Sess.pushCtx()
@@ -957,7 +932,6 @@ func registerSessionHandlers(d *Dispatch) {
 	d.Register(11, 1, hShortcutSnapshot)
 	d.Register(11, 2, hShortcutBind)
 	d.Register(11, 3, hShortcutUnbind)
-	d.Register(3, 9, hPositionReport) // 位置同步：记录玩家世界坐标
 	d.Register(3, 30, hRigSyncBackpack)
 	d.Register(3, 31, hRigSyncRig)
 	d.Register(3, 37, hPlaceBuyout)
