@@ -27,6 +27,8 @@ button,input,select,textarea{font:inherit;color:var(--text)}button{cursor:pointe
 @media(max-width:720px){.shell{grid-template-columns:minmax(0,1fr)}.field.span2{grid-column:auto}.toolbar .grow{min-width:100px}.player-hero .actions,.tabs{flex-wrap:wrap}.tabs button{flex:0 0 auto;white-space:nowrap}.nav button{flex:0 0 auto}}
 
 #fishRulesCard .section-head{flex-wrap:wrap}#fishRulesCard p,#fishRulesCard small{overflow-wrap:anywhere}#fishRulesCard p{margin-bottom:0}
+
+.tunable-group+.tunable-group{margin-top:16px}.tunable-group h3{font-size:14px;margin:0 0 10px}.tunable-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px 16px}.tunable-field{min-width:0}.tunable-field label{display:block;color:var(--muted);margin-bottom:6px;overflow-wrap:anywhere}.tunable-field>div{display:flex;gap:8px;align-items:center}.tunable-field input{min-width:0;flex:1;width:0;padding:7px 9px}.tunable-field button{flex:none}.section-head{flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -69,6 +71,7 @@ button,input,select,textarea{font:inherit;color:var(--text)}button{cursor:pointe
 <div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"></div>
 <script>
+let DASHBOARD_TIMER=null;
 let TOKEN=localStorage.getItem('rf4_admin_token')||'';
 let VIEW='dashboard',PLAYER=null,PLAYER_TAB='profile',FISH_AREA='',FISH_CFG=null,STORE_ITEMS=[];
 const $=s=>document.querySelector(s);
@@ -100,11 +103,11 @@ async function doLogin(e){
     TOKEN=d.token;localStorage.setItem('rf4_admin_token',TOKEN);await boot();
   }catch(e){toast(e.message,'bad')}
 }
-function logout(){TOKEN='';localStorage.removeItem('rf4_admin_token');$('#app').style.display='none';$('#login').style.display='grid'}
+function logout(){clearInterval(DASHBOARD_TIMER);DASHBOARD_TIMER=null;TOKEN='';localStorage.removeItem('rf4_admin_token');$('#app').style.display='none';$('#login').style.display='grid'}
 async function boot(){
   try{
     const me=await api('/api/me');$('#who').textContent=me.username;$('#login').style.display='none';$('#app').style.display='grid';
-    const initial=location.hash.slice(1);go(titles[initial]?initial:'dashboard',true);setInterval(()=>{if(VIEW==='dashboard'&&TOKEN)loadDashboard().catch(()=>{})},8000);
+    const initial=location.hash.slice(1);go(titles[initial]?initial:'dashboard',true);if(!DASHBOARD_TIMER)DASHBOARD_TIMER=setInterval(()=>{if(VIEW==='dashboard'&&TOKEN)loadDashboard(false).catch(()=>{})},8000);
   }catch(e){logout()}
 }
 const titles={dashboard:['总览','服务器运行状态与快捷操作'],players:['玩家工作台','档案、背包、护网、技能一站式管理'],stores:['商店库存','覆盖静态货架价格与库存'],fish:['鱼口控制','水域鱼种权重、上鱼概率与发鱼延迟'],mail:['邮件中心','发送文本与多附件邮件'],audit:['审计日志','追踪后台管理操作']};
@@ -121,11 +124,11 @@ function refreshCurrent(){
   const jobs={dashboard:loadDashboard,players:()=>loadPlayers(false),stores:loadStores,fish:loadFishAreas,mail:()=>{},audit:loadAudit};
   (jobs[VIEW]||(()=>{}))().catch(e=>toast(e.message,'bad'));
 }
-async function loadDashboard(){
+async function loadDashboard(refreshForm=true){
   const d=await api('/api/dashboard');
   const stats=[['在线会话',d.sessions,'主服实时'],['玩家档案',d.players,'已创建'],['物品实例',d.items,'背包+装备'],['邮件',d.mails,'全部记录'],['运行参数',d.tunables,'热更新'],['审计事件',d.audits,'累计']];
   $('#stats').innerHTML=stats.map(([k,v,s])=>`<div class="card stat"><div class="k">${k}</div><div class="v">${fmt(v)}</div><div class="s">${s}</div></div>`).join('');
-  await loadTunables();
+  if(refreshForm)await loadTunables();
 }
 const TUNABLE_DEFS=[
   ['bite_probability','上鱼概率（1=每竿必出）',1],
@@ -142,14 +145,13 @@ const TUNABLE_DEFS=[
   ['settle_scale_debug','结算刻度调试（0=关）',0],
 ];
 async function loadTunables(){
-  let t={};
-  try{ t=await api('/api/tunables'); }catch(e){}
-  if(!t||typeof t!=='object')t={};
-  const rows=TUNABLE_DEFS.map(([key,label,def])=>{
-    const val=t[key]!==undefined?t[key]:'';
-    return `<tr><td>${esc(label)}</td><td class="mono">${key}</td><td><input type="text" id="tun_${key}" value="${esc(String(val))}" placeholder="默认 ${def}" style="width:110px"></td><td><button class="btn sm" onclick="saveTunable('${key}')">保存</button></td></tr>`;
-  }).join('');
-  $('#tunablesBody').innerHTML=`<div class="table-wrap"><table><thead><tr><th>参数</th><th>键</th><th>值</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+ const t=await api('/api/tunables');
+ const groups=[['咬钩与鱼饵',['bite_probability','bite_delay_fixed','bite_delay_scale','bite_delay_max','bite_delay_lure_max','bait_pref_scale','bait_pref_weight_shift']],['鱼体与搏斗',['fish_weight_scale','fight_power_scale']],['经验与结算',['xp_gain','release_xp_ratio','settle_scale_debug']]];
+
+ $('#tunablesBody').innerHTML=groups.map(([title,keys])=>'<section class="tunable-group"><h3>'+title+'</h3><div class="tunable-fields">'+keys.map(key=>{
+ const [,label,def]=TUNABLE_DEFS.find(x=>x[0]===key);
+ return '<div class="tunable-field"><label for="tun_'+key+'">'+esc(label)+'</label><div><input type="number" step="any" id="tun_'+key+'" value="'+esc(String(t[key]??''))+'" placeholder="默认 '+def+'"><button class="btn alt sm" onclick="saveTunable(\''+key+'\')">保存</button></div>'+'</div>';
+ }).join('')+'</div></section>').join('');
 }
 async function saveTunable(key){
   const v=$('#tun_'+key).value.trim();
