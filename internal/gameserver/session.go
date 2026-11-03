@@ -128,6 +128,9 @@ func (s *Session) Push(main, sub uint8, body *proto.Value) uint32 {
 
 	s.sendMu.Lock()
 	defer s.sendMu.Unlock()
+	if s.closed.Load() {
+		return 0
+	}
 	callID := uint32(s.Srv.nextCallID(s.Token))
 	env := proto.BuildRequestEnvelope(callID, main, sub, append(bodyBytes, 0x01))
 	if traceCmds {

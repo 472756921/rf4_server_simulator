@@ -611,6 +611,9 @@ func hCastPrepare(ctx *Ctx) ([]byte, bool) {
 		gear = guids[0]
 	}
 	st := srv.stateFor(ctx.Sess.Userid)
+	if !srv.pendingCatchAllowsCast(ctx, st) {
+		return nil, true
+	}
 	st.mu.Lock()
 	st.GearGuid = gear
 	depthCM := st.DepthCM
@@ -651,6 +654,9 @@ func hCast(ctx *Ctx) ([]byte, bool) {
 		gear = guids[len(guids)-1]
 	}
 	st := srv.stateFor(ctx.Sess.Userid)
+	if !srv.pendingCatchAllowsCast(ctx, st) {
+		return nil, true
+	}
 	if ctx.Tree != nil {
 		if loc := findObjStr(ctx.Tree, "olieodeoaof"); loc != "" {
 			st.Loc = loc
@@ -709,10 +715,16 @@ func hCast(ctx *Ctx) ([]byte, bool) {
 		if hasData && !nearWater {
 			ctx.Log.Info("距水体过远，本杆不派鱼", "loc", locNow, "x", px, "z", pz, "reach", waterReachM)
 		} else {
-			srv.scheduleBite(ctx.Sess, st)
+			if !srv.scheduleBite(ctx.Sess, st) {
+				ctx.ReplyFailure("System.InvalidOperationException", "请先处理当前鱼获")
+				return nil, true
+			}
 		}
 	} else {
-		srv.scheduleBite(ctx.Sess, st)
+		if !srv.scheduleBite(ctx.Sess, st) {
+			ctx.ReplyFailure("System.InvalidOperationException", "请先处理当前鱼获")
+			return nil, true
+		}
 	}
 
 	// 响应 800.f0 返回当前钓组 157 对象，包含完整竿树和重建后的 f5。
@@ -952,20 +964,13 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 	if f0 == 3 || f0 == 5 || f0 == 6 {
 		// 客户端尚未接收鱼实体：保留当前鱼，延迟重推同一尾，
 		// 不能把不兼容的钓组状态误当成鱼已离场。
-		if st.biteTimer != nil {
-			st.biteTimer.Stop()
-			st.biteTimer = nil
-		}
+		st.cancelBiteTimerLocked()
 		st.PushSent = false
 		st.Hooked = false
-		pending := st.Pending
-		castActive := st.CastActive
-		st.mu.Unlock()
-		if castActive && pending != nil {
-			uid := ctx.Sess.Userid
-			fishGUID := pending.FishGUID
-			time.AfterFunc(6*time.Second, func() { srv.repushPending14_14(uid, fishGUID) })
+		if st.CastActive && st.Pending != nil {
+			srv.armPendingTimerLocked(ctx.Sess.Userid, st, 6*time.Second)
 		}
+		st.mu.Unlock()
 		return nil, true
 	}
 	if f0 == 1 || f0 == 2 || f0 == 8 {
@@ -973,10 +978,7 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 		// 它们不代表收竿、断线或钓组离水；
 		// 旧逻辑把 CastActive 一并清掉，导致饵仍在水中却永远不再派鱼。
 		// 只清理当前鱼，并在同一水中钓组上重新安排下一次判鱼。
-		if st.biteTimer != nil {
-			st.biteTimer.Stop()
-			st.biteTimer = nil
-		}
+		st.cancelBiteTimerLocked()
 		pending := st.Pending
 		st.Pending = nil
 		st.PushSent = false
@@ -994,9 +996,8 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 		}
 		return nil, true
 	}
-	if st.biteTimer != nil {
-		st.biteTimer.Stop()
-	}
+	st.cancelBiteTimerLocked()
+	st.cancelPendingTimerLocked()
 	pending := st.Pending
 	st.Resolved = true
 	st.Pending = nil
