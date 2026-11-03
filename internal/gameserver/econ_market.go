@@ -862,39 +862,12 @@ func (s *Server) repairPartsOf(ctx context.Context, it *store.Item) []repairPart
 			nid = uint32(u64Of(child.Fields[nidx].Num))
 			cat = catOf(nid)
 		}
-		// 摇柄(34) 不进工坊列表：既不能修复也不提供替代品。
-		if cat == 34 {
+		// 只收零件本身：摇柄(34) 不进工坊列表；线(11)/渔轮(6)/拟饵等
+		// 属于已装配的渔具，不是这根杆子的零件，一律排除。
+		if !workshopPartCategories[cat] {
 			continue
 		}
 		add(g, nid, cat, condOf(child))
-	}
-	if len(fields) > 4 {
-		if g := fields[3].Hex; g != "" { // f3 挂线
-			add(g, 0, 11, 1.0)
-		}
-		if g := fields[4].Hex; g != "" { // f4 挂轮
-			add(g, 0, 6, 1.0)
-		}
-	}
-	if idx := fieldIdxByCS(it.WireClass, csRigObject); idx >= 0 && idx < len(fields) {
-		rig := fields[idx].Val
-		if rig != nil && rig.Kind == proto.KindObj && rig.FieldCount() > 2 {
-			if arr := rig.Field(2).Val; arr != nil {
-				for _, e := range arr.Items {
-					if e == nil || e.Kind != proto.KindObj {
-						continue
-					}
-					gf := e.Field(1)
-					cf := e.Field(0)
-					g := gf.GuidHex()
-					cond := 1.0
-					if row, rerr := s.DB.GetItemByGUID(ctx, g); rerr == nil && row != nil {
-						cond = row.Durability
-					}
-					add(g, 0, cf.U32(), cond)
-				}
-			}
-		}
 	}
 	return out
 }
@@ -907,8 +880,16 @@ var partPriceByItemID map[string][2]int64
 
 // 零件没有独立价目时按品类给基准价，数值参考官方抓包样本
 // （轴承 845/8、摩擦片 754/7、齿轮 296/5、竿坯 1200/12 …）。
+// workshopPartCategories 允许出现在工坊零件列表里的品类。
+// 4 竿柄 / 5 导环 / 7 轴承 / 8 线杯 / 9 摩擦片 / 10 轮油 /
+// 36 竿坯 / 52 齿轮 / 63 电机 / 81 引擎
+var workshopPartCategories = map[uint32]bool{
+	4: true, 5: true, 7: true, 8: true, 9: true, 10: true,
+	36: true, 52: true, 63: true, 81: true,
+}
+
 // noReplaceCategories 不允许更换型号、只能修复的零件品类。
-var noReplaceCategories = map[int64]bool{7: true, 8: true, 36: true}
+var noReplaceCategories = map[int64]bool{5: true, 7: true, 8: true, 36: true}
 
 var partBasePrice = map[int64][2]int64{
 	4:  {600, 6},   // 竿柄
