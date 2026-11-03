@@ -8,7 +8,8 @@ if [[ ! "${COMMIT_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
 fi
 
 SHORT_SHA="${COMMIT_SHA:0:7}"
-VERSION="preview-${SHORT_SHA}"
+BUILD_TS="$(date -u +%Y%m%dT%H%M%SZ)"
+VERSION="preview-${BUILD_TS}-${SHORT_SHA}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT}"
 export CGO_ENABLED=0
@@ -86,6 +87,7 @@ cat > "${RELEASE_NOTES}" <<EOF
 - 分支：main
 - Commit：${COMMIT_SHA}
 - 短 Commit ID：${SHORT_SHA}
+- 构建时间（UTC）：${BUILD_TS}
 - 构建方式：GitHub Actions
 
 ## 包内内容
