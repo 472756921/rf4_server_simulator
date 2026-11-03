@@ -24,8 +24,9 @@ type FishState struct {
 	Spot         uint64
 	DepthCM      int64 // 玩家设钓深（17/12 记入；14/1 的 158.f2 透传用）
 	CastActive   bool
-	InWater      bool // 14/7 动画位出现 0x400（钓组在水中）
-	NeedBite     bool // 到点时还没入水，挂起等 0x400 再派鱼
+	BiteGen      uint64 // 咬钩定时器代号：每次重排递增，过期定时器自动作废
+	InWater      bool   // 14/7 动画位出现 0x400（钓组在水中）
+	NeedBite     bool   // 到点时还没入水，挂起等 0x400 再派鱼
 	CastTs       time.Time
 	FallTs       time.Time
 	FallSeen     bool
@@ -981,9 +982,14 @@ func (s *Server) scheduleBiteState(sess *Session, st *FishState, preserveHooked,
 	}
 	st.CastActive = true
 	st.Resolved = false
-	st.Pending = nil
-	if !preserveHooked {
-		st.Hooked = false
+	// 已经推给客户端、且玩家刺中正在溜的鱼不能被新排程清掉：
+	// 否则客户端还在溜旧鱼，服务端却按新鱼结算（青蛙→其他鱼就是这么来的）。
+	fighting := st.PushSent && st.Hooked && st.Pending != nil
+	if !fighting {
+		st.Pending = nil
+		if !preserveHooked {
+			st.Hooked = false
+		}
 	}
 	st.PushSent = false
 	st.FallSeen = false
@@ -998,21 +1004,29 @@ func (s *Server) scheduleBiteState(sess *Session, st *FishState, preserveHooked,
 		st.NeedBite = false
 	}
 	st.Bonus = bonus
+	st.BiteGen++
+	gen := st.BiteGen
 	delay := s.biteDelay(st, bonus)
 	st.BiteAt = now.Add(time.Duration(delay * float64(time.Second)))
 	uid := sess.Userid
 	timer := time.AfterFunc(time.Until(st.BiteAt), func() {
-		s.onBiteTimer(uid)
+		s.onBiteTimer(uid, gen)
 	})
 	st.biteTimer = timer
 	st.mu.Unlock()
 }
 
 // onBiteTimer 到点：顺延保护检查 → 判鱼 → 推 14/14。
-func (s *Server) onBiteTimer(uid int64) {
+func (s *Server) onBiteTimer(uid int64, gen uint64) {
 	sess := s.liveSessionByUID(uid)
 	st := s.stateFor(uid)
 	st.mu.Lock()
+	if gen != st.BiteGen {
+		// 被重排替换掉的旧定时器：既不能清指针，也不能判鱼。否则会把新
+		// 定时器的指针清空，它就成了“没人管但仍在跑”的第二条鱼。
+		st.mu.Unlock()
+		return
+	}
 	st.biteTimer = nil
 	if sess == nil {
 		// 进程仍活着但玩家断开：保留 CastActive/Pending/BiteAt，下一次
@@ -1056,7 +1070,7 @@ func (s *Server) onBiteTimer(uid int64) {
 			wait = minWait
 		}
 		st.BiteAt = now.Add(wait)
-		t := time.AfterFunc(wait, func() { s.onBiteTimer(uid) })
+		t := time.AfterFunc(wait, func() { s.onBiteTimer(uid, gen) })
 		st.biteTimer = t
 		st.mu.Unlock()
 		return
@@ -1067,7 +1081,7 @@ func (s *Server) onBiteTimer(uid int64) {
 	if !lure && now.Sub(st.CastTs) < 12*time.Second && st.TickSeen && !st.RigSettled {
 		// 顺延 1s 轮询（12s 兜底）
 		st.BiteAt = now.Add(time.Second)
-		t := time.AfterFunc(time.Second, func() { s.onBiteTimer(uid) })
+		t := time.AfterFunc(time.Second, func() { s.onBiteTimer(uid, gen) })
 		st.biteTimer = t
 		st.mu.Unlock()
 		return
