@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"rf4server/internal/proto"
@@ -19,6 +20,7 @@ import (
 // FishState 保存单个玩家的钓鱼状态，重连后继续使用。
 type FishState struct {
 	mu           fishStateMutex
+	finishMu     sync.Mutex
 	GearGuid     string
 	RigType      int64 // jppmjnahbpo 钓组种类（on_cast 记录；路亚族单独节奏）
 	Loc          string
