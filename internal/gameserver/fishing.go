@@ -379,6 +379,12 @@ func (s *Server) rollFishForRig(ctx context.Context, uid int64, gearGUID, loc, b
 }
 
 func (s *Server) rollFishWithRules(loc, bait string, gearCapKg float64, bonus fishingSkillBonus) *RolledFish {
+	if s.tunableF("fish_bait_rules_enabled", 0) == 1 {
+		if s.DB == nil {
+			return nil
+		}
+		return s.rollFishFromDBWithRules(loc, bait, gearCapKg, bonus)
+	}
 	if s.DB != nil {
 		if f := s.rollFishFromDBWithRules(loc, bait, gearCapKg, bonus); f != nil {
 			return f
@@ -395,6 +401,7 @@ func (s *Server) rollFishFromDB(loc, bait string) *RolledFish {
 }
 
 func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bonus fishingSkillBonus) *RolledFish {
+	strict := s.tunableF("fish_bait_rules_enabled", 0) == 1
 	cctx := s.dbCtx()
 	statLoc := s.DB.ResolveStatLoc(cctx, loc)
 	if statLoc == "" {
@@ -436,11 +443,17 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 				wts[i] = ov.Weight
 				hasPositive = true
 			}
-			if !hasPositive {
+			if !hasPositive && !strict {
 				copy(wts, base)
 				keys = keys[:len(roster)]
 				wts = wts[:len(roster)]
 			}
+		}
+	}
+	if strict {
+		keys, wts = s.filterFishBaits(statLoc, bait, keys, wts)
+		if len(keys) == 0 {
+			return nil
 		}
 	}
 	// companion 周纪录饵效（config bait_pref_scale / bait_pref_weight_shift；
@@ -1107,6 +1120,13 @@ func (s *Server) onBiteTimer(uid int64, gen uint64) {
 		return
 	}
 	f := s.rollFishForRig(s.dbCtx(), uid, st.GearGuid, st.Loc, st.Bait, st.Bonus)
+	if f == nil {
+		st.PushSent = false
+		st.Pending = nil
+		st.Resolved = true
+		st.mu.Unlock()
+		return
+	}
 	f.LocLevel = s.currentLevel(uid)
 	st.Pending = f
 	gear := st.GearGuid

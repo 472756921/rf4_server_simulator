@@ -233,6 +233,10 @@ func (s *Server) handleTunableSet(w http.ResponseWriter, r *http.Request) {
 		httpError(w, 400, "参数错误")
 		return
 	}
+	if req.Key == "fish_bait_rules_enabled" && req.Value != "0" && req.Value != "1" {
+		httpError(w, 400, "吃饵规则开关只能为 0 或 1")
+		return
+	}
 	if err := s.db.TunableSet(r.Context(), req.Key, req.Value, adminOf(r)); err != nil {
 		httpError(w, 500, err.Error())
 		return
