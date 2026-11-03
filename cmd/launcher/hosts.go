@@ -10,15 +10,26 @@ package main
 
 import (
 	"os"
+	"regexp"
 	"strings"
 
 	"rf4server/internal/config"
 )
 
 const (
-	hostsMarker   = "rf4s-local"
 	hostsSection  = "# RF4 local server"
-	hostsLocalRow = hostsMarker + " 127.0.0.1 "
+	hostsMarker   = "# rf4s-local"
+	hostsLocalRow = "127.0.0.1 "
+)
+
+// 与 tools/hosts.ps1 的格式约定一致：
+//   - 启用行：标准 hosts 格式 "127.0.0.1 api.rf4game.ru"（首列必须是 IP，
+//     否则 Windows 解析器整行忽略——不能把标记词放在行首）
+//   - 注释行："# rf4s-local 127.0.0.1 api.rf4game.ru"
+var (
+	reHostsActive   = regexp.MustCompile(`^127\.0\.0\.1\s+api\.rf4game\.(ru|com)\s*$`)
+	reHostsComment  = regexp.MustCompile(`^#\s*rf4s-local\s+127\.0\.0\.1\s+(api\.rf4game\.(?:ru|com))`)
+	reHostsHostname = regexp.MustCompile(`api\.rf4game\.(?:ru|com)`)
 )
 
 // hostsFilePath 返回系统 hosts 文件路径。
@@ -39,8 +50,8 @@ func loginDomains(cfg *config.Config) []string {
 	return []string{ru, com}
 }
 
-// hostsSetLocal 将本项目管理的行切换为启用状态（指向 127.0.0.1）。幂等。
-// 已存在的标记行按 domains 顺序重建；不足的域名追加新行，多余的标记行丢弃。
+// hostsSetLocal 将本项目管理的行切换为启用状态（标准 hosts 格式，指向
+// 127.0.0.1）。幂等：注释行恢复启用，已启用行保留，缺失的域名追加。
 func hostsSetLocal(path string, domains []string) error {
 	text, err := os.ReadFile(path)
 	if err != nil {
@@ -48,46 +59,56 @@ func hostsSetLocal(path string, domains []string) error {
 	}
 	lines := strings.Split(strings.ReplaceAll(string(text), "\r\n", "\n"), "\n")
 	out := make([]string, 0, len(lines)+len(domains)+2)
-	seen := 0
+	present := map[string]bool{}
+	sectionAdded := false
 	for _, line := range lines {
-		if strings.Contains(strings.TrimSpace(line), hostsMarker) {
-			if seen < len(domains) {
-				out = append(out, hostsLocalRow+domains[seen])
-			}
-			seen++
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case reHostsComment.MatchString(trimmed):
+			// 注释行 → 去掉 "# rf4s-local " 前缀恢复启用
+			rest := strings.TrimSpace(strings.TrimPrefix(trimmed, hostsMarker))
+			out = append(out, rest)
+			present[reHostsHostname.FindString(rest)] = true
+		case reHostsActive.MatchString(trimmed):
+			out = append(out, trimmed)
+			present[reHostsHostname.FindString(trimmed)] = true
+		default:
+			out = append(out, strings.TrimRight(line, "\r"))
+		}
+	}
+	for _, d := range domains {
+		if present[d] {
 			continue
 		}
-		out = append(out, strings.TrimRight(line, "\r"))
-	}
-	for ; seen < len(domains); seen++ {
-		if seen == 0 {
+		if !sectionAdded {
 			if len(out) > 0 && strings.TrimSpace(out[len(out)-1]) != "" {
 				out = append(out, "")
 			}
 			out = append(out, hostsSection)
+			sectionAdded = true
 		}
-		out = append(out, hostsLocalRow+domains[seen])
+		out = append(out, hostsLocalRow+d)
 	}
 	return os.WriteFile(path, []byte(strings.Join(out, "\r\n")), 0o644)
 }
 
-// hostsMode 判断当前 hosts 指向：local=存在生效的标记行；official=标记行
-// 全部处于注释状态或不存在；unknown=读取失败。
+// hostsMode 判断当前 hosts 指向：local=存在生效的标准格式行；official=
+// 生效行全部处于注释状态或不存在；unknown=读取失败。
 func hostsMode(path string) string {
 	text, err := os.ReadFile(path)
 	if err != nil {
 		return "unknown"
 	}
 	for _, line := range strings.Split(strings.ReplaceAll(string(text), "\r\n", "\n"), "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.Contains(trimmed, hostsMarker) && !strings.HasPrefix(trimmed, "#") {
+		if reHostsActive.MatchString(strings.TrimSpace(line)) {
 			return "local"
 		}
 	}
 	return "official"
 }
 
-// hostsRestore 将本项目管理的标记行全部注释，恢复官方解析。幂等。
+// hostsRestore 将本项目管理的启用行加 "# rf4s-local " 前缀注释，恢复官方
+// 解析。幂等。
 func hostsRestore(path string) error {
 	text, err := os.ReadFile(path)
 	if err != nil {
@@ -96,8 +117,9 @@ func hostsRestore(path string) error {
 	lines := strings.Split(strings.ReplaceAll(string(text), "\r\n", "\n"), "\n")
 	changed := false
 	for i, line := range lines {
-		if strings.Contains(strings.TrimSpace(line), hostsMarker) && !strings.HasPrefix(strings.TrimSpace(line), "#") {
-			lines[i] = "# " + strings.TrimRight(line, "\r")
+		trimmed := strings.TrimSpace(line)
+		if reHostsActive.MatchString(trimmed) {
+			lines[i] = hostsMarker + " " + trimmed
 			changed = true
 		}
 	}
