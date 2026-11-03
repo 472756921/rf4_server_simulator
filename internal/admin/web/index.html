@@ -306,8 +306,12 @@ async function loadFishAreas(){
   FISH_AREAS=await api('/api/fish/areas');renderFishAreas();
   if(!FISH_AREA&&FISH_AREAS.length){await selectFishArea(FISH_AREAS[0].loc)}
 }
+// 水域展示顺序：与游戏客户端地图选择顺序一致，未列出的水域排在最后（保持原有相对顺序）。
+const FISH_AREA_ORDER=['克马羚诺也湖','埃尔克湖','惟有诺克河','旧奥斯特罗格湖','白河','廓里湖','梅德韦杰湖','沃尔霍夫河','北顿涅茨河','苏拉河','拉多加湖','琥珀湖','拉多加湖群岛','阿赫图巴河','铜湖','下通古斯卡河','亚马河','挪威海'];
 function renderFishAreas(){
-  const q=($('#fishSearch')?.value||'').toLowerCase();const rows=FISH_AREAS.filter(x=>x.loc.toLowerCase().includes(q));
+  const q=($('#fishSearch')?.value||'').toLowerCase();
+  const orderOf=x=>{const i=FISH_AREA_ORDER.indexOf(x.loc);return i<0?FISH_AREA_ORDER.length:i;};
+  const rows=FISH_AREAS.filter(x=>x.loc.toLowerCase().includes(q)).map((x,i)=>({x,i})).sort((a,b)=>orderOf(a.x)-orderOf(b.x)||a.i-b.i).map(e=>e.x);
   $('#fishAreas').innerHTML=rows.map(x=>`<div class="player-row ${FISH_AREA===x.loc?'on':''}" data-loc="${esc(x.loc)}" onclick="selectFishArea(this.dataset.loc)"><div><div class="n mono">${esc(x.loc)}</div><div class="id">${x.fish_count} 个鱼种</div></div></div>`).join('')||'<div class="empty">没有匹配水域</div>';
 }
 async function selectFishArea(loc){FISH_AREA=loc;renderFishAreas();FISH_CFG=await api('/api/fish/config?loc='+encodeURIComponent(loc));renderFishEditor()}
