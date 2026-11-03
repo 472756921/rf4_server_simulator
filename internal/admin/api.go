@@ -94,6 +94,9 @@ func NewServer(cfg config.Admin, db *store.DB, log logger, webFS fs.FS) *Server 
 	return s
 }
 
+// Handler 返回管理后台路由，供统一入口直接挂载；不依赖独立监听端口。
+func (s *Server) Handler() http.Handler { return s.mux }
+
 // SetSessionCount 供外部更新在线会话数。
 func (s *Server) SetSessionCount(n int64) { s.sessionCount.Store(n) }
 
