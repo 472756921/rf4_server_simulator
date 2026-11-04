@@ -1157,6 +1157,14 @@ func (s *Server) buildFish27(f *RolledFish, hookGUID, gearGuid string) *proto.Va
 
 // Push14_14 发判鱼推送：args("524")[guid(钓组), 27]。
 func (s *Session) Push14_14(f *RolledFish, hookGUID, gearGuid string) {
+	if f == nil {
+		return
+	}
+	// 同一尾鱼短时间内重复推送会让客户端重建鱼实体，出现"溜的是一条、结算是另一条"。
+	if !s.claimFishPush(f.FishGUID) {
+		s.log.Info("忽略重复的 14/14 推送", "guid", shortGUID(f.FishGUID))
+		return
+	}
 	if gearGuid == "" {
 		gearGuid = "00000000000000000000000000000000"
 	}
@@ -1176,6 +1184,24 @@ func (s *Session) Push14_14(f *RolledFish, hookGUID, gearGuid string) {
 		proto.Guid(gearGuid),
 		s.Srv.buildFish27(f, hookGUID, gearGuid),
 	))
+}
+
+// fishPushDedupeWindow 同一尾鱼重复推送的抑制窗口。
+const fishPushDedupeWindow = 5 * time.Second
+
+// claimFishPush 同一 FishGUID 在窗口内只放行一次推送；空 GUID 不抑制。
+func (s *Session) claimFishPush(guid string) bool {
+	if guid == "" {
+		return true
+	}
+	s.fishPushMu.Lock()
+	defer s.fishPushMu.Unlock()
+	if s.fishPushGUID == guid && time.Since(s.fishPushAt) < fishPushDedupeWindow {
+		return false
+	}
+	s.fishPushGUID = guid
+	s.fishPushAt = time.Now()
+	return true
 }
 
 // scheduleBite 排咬钩定时器（重抛作废上一杆）。
