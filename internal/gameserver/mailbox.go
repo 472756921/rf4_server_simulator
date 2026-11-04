@@ -894,7 +894,7 @@ func (s *Server) execAdminCmd(cmd *AdminCommand) {
 		s.log.Info("管理指令：刷新玩家档案", "uid", cmd.UID)
 	case "refresh_skills":
 		for _, sess := range s.sessionsForUID(cmd.UID) {
-			sess.Push2_6(0)
+			sess.Push2_4SkillTree("admin refresh")
 		}
 		s.log.Info("管理指令：刷新技能面板", "uid", cmd.UID)
 	default:

@@ -160,8 +160,8 @@ func TestSettleMembershipDoesNotChangeXP(t *testing.T) {
 	if got := u64Of(obj310.Field(0).Num); got != 229 {
 		t.Fatalf("310.f0=%d, want 229（本条鱼总经验）", got)
 	}
-	if got := u32Of(obj310.Field(1).Num); got != 1 {
-		t.Fatalf("310.f1=%d, want 1（该鱼种尚无入护纪录）", got)
+	if got := u32Of(obj310.Field(1).Num); got != 0 {
+		t.Fatalf("310.f1=%d, want 0（229 XP 尚未达到升级门槛）", got)
 	}
 	if got := u32Of(obj310.Field(5).Num); got != 0 {
 		t.Fatalf("310.f5=%d, want 0（229 XP 不足以升 2 级）", got)
@@ -257,7 +257,7 @@ func TestGradeLinesFollowSettlementRuler(t *testing.T) {
 	})
 }
 
-func TestPersonalRecordFlagFollowsKeptWeight(t *testing.T) {
+func TestPersonalRecordFollowsKeptWeight(t *testing.T) {
 	srv, db := newProgressSrv(t)
 	ctx := context.Background()
 	const uid = int64(1000001)
@@ -272,18 +272,18 @@ func TestPersonalRecordFlagFollowsKeptWeight(t *testing.T) {
 	if res.isRecord {
 		t.Fatal("642g 未超过已入护的 800g，不应记为个人纪录")
 	}
-	if got := u32Of(srv.buildSettle813(ctx, uid, lighter, res).Field(8).Val.Field(1).Num); got != 0 {
-		t.Fatalf("310.f1=%d, want 0", got)
+	if got := u32Of(srv.buildSettle813(ctx, uid, lighter, res).Field(8).Val.Field(1).Num); int64(got) != res.levelsGained {
+		t.Fatalf("310.f1=%d, want 升级数%d", got, res.levelsGained)
 	}
 	heavier := &RolledFish{FishGUID: newFishGUID(), Species: "perch", Grade: 4, WeightG: 900, LengthM: 0.35, LocLevel: "level_001_lake"}
 	res2 := srv.settleCatchXP(ctx, uid, heavier, 1)
 	if !res2.isRecord {
 		t.Fatal("900g 超过已入护的 800g，应记为个人纪录")
 	}
-	if got := u32Of(srv.buildSettle813(ctx, uid, heavier, res2).Field(8).Val.Field(1).Num); got != 1 {
-		t.Fatalf("310.f1=%d, want 1", got)
+	if got := u32Of(srv.buildSettle813(ctx, uid, heavier, res2).Field(8).Val.Field(1).Num); int64(got) != res2.levelsGained {
+		t.Fatalf("310.f1=%d, want 升级数%d", got, res2.levelsGained)
 	}
-	if got := u32Of(srv.build813(ctx, uid, heavier, 900, 0).Field(8).Val.Field(1).Num); got != 0 {
+	if got := u32Of(srv.build813(ctx, uid, heavier, 900, 0, 0).Field(8).Val.Field(1).Num); got != 0 {
 		t.Fatalf("同重 310.f1=%d, want 0", got)
 	}
 }
