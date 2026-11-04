@@ -46,8 +46,20 @@ func (d *DB) AddSkillPoints(ctx context.Context, uid, skillID int64, delta float
 	return err
 }
 
-// ListSkillNodes 取玩家技能节点等级。
+// ListSkillNodes 取玩家技能节点等级，并把共享身份投影到组内全部节点。
 func (d *DB) ListSkillNodes(ctx context.Context, uid int64) (map[int64]int64, error) {
+	out, err := d.listRawSkillNodes(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	ident, err := d.LoadSkillIdentity(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return ident.Project(out), nil
+}
+
+func (d *DB) listRawSkillNodes(ctx context.Context, uid int64) (map[int64]int64, error) {
 	rows, err := d.SQL.QueryContext(ctx, `SELECT node_id, level FROM skill_node WHERE uid=?`, uid)
 	if err != nil {
 		return nil, err
@@ -61,7 +73,7 @@ func (d *DB) ListSkillNodes(ctx context.Context, uid int64) (map[int64]int64, er
 		}
 		out[n] = lv
 	}
-	return ProjectSharedSkillNodes(out), rows.Err()
+	return out, rows.Err()
 }
 
 // ---- 快捷栏 container_slot ----

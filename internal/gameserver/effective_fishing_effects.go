@@ -5,7 +5,6 @@ import (
 	"math"
 
 	"rf4server/internal/proto"
-	"rf4server/internal/store"
 	"rf4server/internal/wiregen"
 )
 
@@ -28,11 +27,7 @@ func (e effectiveFishingEffects) nodeLevel(nd skillNodeDef) int64 {
 	if learned > nd.MaxLevel {
 		learned = nd.MaxLevel
 	}
-	gear := e.GearNodes[nd.NodeID]
-	for _, id := range store.SharedSkillNodeIDs(nd.CatID, nd.NodeID) {
-		gear = max(gear, e.GearNodes[id])
-	}
-	total := learned + gear
+	total := learned + e.GearNodes[nd.NodeID]
 	if total > nd.MaxLevel {
 		total = nd.MaxLevel
 	}
@@ -116,6 +111,13 @@ func (s *Server) effectiveFishingSkills(ctx context.Context, uid int64, gears ..
 				e.GearNodes[node] += level
 			}
 		}
+	}
+	if len(e.GearNodes) > 0 {
+		ident, err := s.DB.LoadSkillIdentity(ctx)
+		if err != nil {
+			return e, err
+		}
+		e.GearNodes = ident.Project(e.GearNodes)
 	}
 	return e, nil
 }
