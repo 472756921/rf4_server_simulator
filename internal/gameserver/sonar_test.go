@@ -1,6 +1,7 @@
 package gameserver
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -16,7 +17,8 @@ import (
 const sonarAssetSHA256 = "19b44b49f001e1e59723b9a7ed659770acdf9ffdf0fdc35359e340dc8803fa5e"
 
 func TestSonarGridAsset(t *testing.T) {
-	gotHash := fmt.Sprintf("%x", sha256.Sum256(sonarGridsJSON))
+	normalized := bytes.ReplaceAll(sonarGridsJSON, []byte("\r\n"), []byte("\n"))
+	gotHash := fmt.Sprintf("%x", sha256.Sum256(normalized))
 	if gotHash != sonarAssetSHA256 {
 		t.Fatalf("声呐网格资产被改写: %s, 期望 %s", gotHash, sonarAssetSHA256)
 	}
