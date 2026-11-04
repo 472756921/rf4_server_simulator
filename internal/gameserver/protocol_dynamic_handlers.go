@@ -163,6 +163,10 @@ func hDynamicRodBreak(ctx *Ctx) ([]byte, bool) {
 				"broken", shortGUID(outcome.BrokenGUID), "line", outcome.LineBroken,
 				"comp", outcome.ComponentBroken,
 				"line_loss_m", outcome.LineLossM, "removed", len(outcome.RemovedGUIDs))
+			// 断件会改变竿耐久与在装组件；11028 的 f3 更新树不足以刷新客户端
+			// 本地物品模型（组装槽仍可选）。补推 4/22 全量竿线同步强制刷新。
+			ctx.Sess.Push4_22Full()
+			// 断件必丢鱼：pending 已在上方取出置空，按已结算处理。
 			return body, true
 		}
 		ctx.Log.Warn("17/9 断件写库失败，回退兼容响应", "rod", shortGUID(rodGUID), "err", err)

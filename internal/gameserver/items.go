@@ -194,13 +194,15 @@ func (s *Server) ItemToTree(ctx context.Context, it *store.Item) (*proto.Value, 
 		s.materializeInto(ctx, class, def, obj, it.GUID, it.Workmanship, it.Durability)
 		s.canonicalizeItemPhysicalFields(ctx, it, obj.Fields)
 	}
-
 	// 鱼竿动态接管（竿上组件/钓组/挂线挂轮必须现算，快照过期会让插槽列表失真）
 	if class == "cnolibojkao" {
 		if err := s.rebuildRod(ctx, it, obj); err != nil {
 			return nil, err
 		}
 	}
+	// 损坏态投影：耐久耗尽的装备点亮客户端红框/折断渲染（只动 wire，不落库）。
+	// 必须放在 rebuildRod 之后——竿的 hgaijieklek 会按定义基值重建，之前写入会被抹掉。
+	applyBrokenItemState(class, obj, it.Durability)
 	return obj, nil
 }
 

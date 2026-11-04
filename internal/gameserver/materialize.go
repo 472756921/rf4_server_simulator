@@ -244,3 +244,24 @@ func stateFlagsZeroFill(class string, obj *proto.Value, def *store.ItemDef) {
 		obj.Fields[idx].Num = ptrU64(flags)
 	}
 }
+
+// 客户端损坏位（bapnijnooje.akhnmdpbhnf）。
+// lcdihnabclk.cbhjcnkojgc 以 hgaijieklek 含 128 判定损坏（红框、“损坏”文案、
+// 场景折断渲染、修理铺列表）。
+// ⚠️ 不能动 dbgaheblmei（状态位）：追加 fhblahbelfd(16) 会让客户端把物品
+// 视为不可操作状态，删除/出售等动作选项被禁用（背包损坏道具无法删除的根因）。
+const brokenItemFlagBit uint64 = 128
+
+// applyBrokenItemState 把耐久耗尽的装备投影为客户端“损坏”态：
+// 只追加 hgaijieklek|=128。不落库，耐久修复后自动消失。
+func applyBrokenItemState(class string, obj *proto.Value, durability float64) {
+	if durability > 0 {
+		return
+	}
+	if fieldIdxByCS(class, csDurability) < 0 {
+		return
+	}
+	if idx := fieldIdxByCS(class, csStateEnum); idx >= 0 && idx < len(obj.Fields) {
+		obj.Fields[idx].Num = ptrU64(u64Of(obj.Fields[idx].Num) | brokenItemFlagBit)
+	}
+}

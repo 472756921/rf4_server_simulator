@@ -616,6 +616,18 @@ func hCastPrepare(ctx *Ctx) ([]byte, bool) {
 		ctx.Sess.Push4_22Full()
 	}
 	if row, err := srv.DB.GetItemByGUID(ctx.Sess.pushCtx(), gear); err == nil && row != nil {
+		if row.Durability <= 0 {
+			// 断竿/耐久归零的竿不可抛投（客户端可能不理会 17/7 的拒取
+			// 响应继续持竿，14/1 必须再拦一道）。
+			st.mu.Lock()
+			st.GearGuid = ""
+			st.mu.Unlock()
+			ctx.Log.Info("14/1 被拒：鱼竿已损坏", "rod", shortGUID(gear))
+			if body := castReady158(ctx, "", depthCM, 0); body != nil {
+				return body, true
+			}
+			return nil, false
+		}
 		rigType = srv.rigTypeOfItem(ctx.Sess.pushCtx(), row)
 		st.mu.Lock()
 		st.RigType = rigType
@@ -656,6 +668,15 @@ func hCast(ctx *Ctx) ([]byte, bool) {
 	// 记录钓组类型并读取当前钩上饵；路亚使用独立的咬钩节奏。
 	rigType := int64(0)
 	if row, err := srv.DB.GetItemByGUID(ctx.Sess.pushCtx(), gear); err == nil && row != nil {
+		if row.Durability <= 0 {
+			// 断竿不可抛投：耐久归零只能修理，17/7 拒取后客户端仍可能直发 14/2。
+			st.mu.Lock()
+			st.GearGuid = ""
+			st.mu.Unlock()
+			ctx.Log.Info("14/2 被拒：鱼竿已损坏", "rod", shortGUID(gear))
+			ctx.ReplyFailure("System.InvalidOperationException", "鱼竿已损坏，请先修理")
+			return nil, true
+		}
 		rt := srv.rigTypeOfItem(ctx.Sess.pushCtx(), row)
 		rigType = rt
 		st.mu.Lock()
@@ -913,12 +934,15 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 		if st.biteTimer != nil {
 			st.biteTimer.Stop()
 		}
+		alreadyResolved := st.Resolved // 17/9 断件路径已结算，避免重复计数
 		st.Resolved = true
 		st.Pending = nil
 		st.CastActive = false
 		st.Hooked = false
 		st.mu.Unlock()
-		srv.bumpFishingCounter(ctx.Sess.Userid, "escapes")
+		if !alreadyResolved {
+			srv.bumpFishingCounter(ctx.Sess.Userid, "escapes")
+		}
 		return nil, true
 	}
 	if f0 == 6 {
@@ -930,11 +954,14 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 	if st.biteTimer != nil {
 		st.biteTimer.Stop()
 	}
+	alreadyResolved := st.Resolved
 	st.Resolved = true
 	st.Pending = nil
 	st.CastActive = false
 	st.mu.Unlock()
-	srv.bumpFishingCounter(ctx.Sess.Userid, "escapes")
+	if !alreadyResolved {
+		srv.bumpFishingCounter(ctx.Sess.Userid, "escapes")
+	}
 	return nil, true
 }
 
