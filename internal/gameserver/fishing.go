@@ -1206,6 +1206,166 @@ func (s *Server) repushPending14_14(uid int64) {
 	sess.Push14_14(f, s.mountedHookGuid(s.dbCtx(), gear), gear)
 }
 
+// speciesZhName 返回鱼种中文名（loc_wiki_fish.fish_zh）；缺名回退 key。
+func (s *Server) speciesZhName(ctx context.Context, key string) string {
+	if s == nil || s.DB == nil || key == "" {
+		return key
+	}
+	var name string
+	err := s.DB.SQL.QueryRowContext(ctx,
+		`SELECT COALESCE(NULLIF(fish_zh,''),?) FROM loc_wiki_fish WHERE fish_key=? LIMIT 1`,
+		key, key).Scan(&name)
+	if err != nil || name == "" {
+		return key
+	}
+	return name
+}
+
+// formatWeightG 将克重格式化为聊天提示用的显示文本。
+func formatWeightG(g int64) string {
+	if g >= 1000 {
+		return fmt.Sprintf("%.2fkg", float64(g)/1000.0)
+	}
+	return fmt.Sprintf("%dg", g)
+}
+
+// gradeZhName 档位中文名（1 普通 / 2 达标 / 3 奖杯 / 4 蓝冠）。
+func gradeZhName(grade int64) string {
+	switch grade {
+	case 2:
+		return "达标"
+	case 3:
+		return "奖杯"
+	case 4:
+		return "蓝冠"
+	}
+	return "普通"
+}
+
+// fishLandedText 钓获结算提示文本：奖杯/蓝冠与破纪录必报；普通鱼由结算卡
+// 展示，聊天只报重要事件，避免刷屏。空串表示不播报。
+func (s *Server) fishLandedText(f *RolledFish, newRecord bool) string {
+	if s == nil || f == nil {
+		return ""
+	}
+	name := s.speciesZhName(s.dbCtx(), f.Species)
+	weight := formatWeightG(f.WeightG)
+	switch {
+	case f.Grade >= 3:
+		text := fmt.Sprintf("钓获%s：%s %s", gradeZhName(f.Grade), name, weight)
+		if newRecord {
+			text += "（新纪录）"
+		}
+		return text
+	case newRecord:
+		return fmt.Sprintf("新纪录：%s %s", name, weight)
+	}
+	return ""
+}
+
+// fishKeptText 入护提示文本。
+func (s *Server) fishKeptText(f *RolledFish) string {
+	if s == nil || f == nil {
+		return ""
+	}
+	return fmt.Sprintf("入护：%s %s", s.speciesZhName(s.dbCtx(), f.Species), formatWeightG(f.WeightG))
+}
+
+// fishReleasedText 放生提示文本；奖杯/蓝冠附档位。
+func (s *Server) fishReleasedText(f *RolledFish) string {
+	if s == nil || f == nil {
+		return ""
+	}
+	name := s.speciesZhName(s.dbCtx(), f.Species)
+	weight := formatWeightG(f.WeightG)
+	if f.Grade >= 3 {
+		return fmt.Sprintf("放生%s：%s %s", gradeZhName(f.Grade), name, weight)
+	}
+	return fmt.Sprintf("放生：%s %s", name, weight)
+}
+
+// fishEscapeText 跑鱼提示文本；f 为 nil 时只提示原因。
+func (s *Server) fishEscapeText(f *RolledFish, reason string) string {
+	if s == nil {
+		return ""
+	}
+	if f == nil {
+		return "跑鱼（" + reason + "）"
+	}
+	return fmt.Sprintf("跑鱼：%s %s（%s）",
+		s.speciesZhName(s.dbCtx(), f.Species), formatWeightG(f.WeightG), reason)
+}
+
+// notifyFishLanded 钓获结算播报（官方模板）：蓝冠 k25、奖杯 k26、
+// 破纪录 k03；普通鱼由结算卡展示不播报。模板的鱼名/重量参数编码
+// 未破解（见 fish_tv_test 探测），暂显示占位值。
+func (s *Server) notifyFishLanded(sess *Session, f *RolledFish, newRecord bool) {
+	if sess == nil || f == nil {
+		return
+	}
+	// 官方模板参数：键1=鱼种key（客户端本地化），键2=重量克（/1000 千克）。
+	// fish_tv_kv 默认 0：KV 推送曾在客户端触发解析异常断连（回登录界面），
+	// 编码经面板 kv_shape=30 探测确认后置 1 启用。
+	var kv *proto.Value
+	if s.tunableF("fish_tv_kv", 0) != 0 {
+		kv = fishTVKv(f.Species, f.WeightG)
+	}
+	switch {
+	case f.Grade >= 4:
+		sess.pushChatProbe(27, 25, "", kv) // 超级稀有鱼 X 千克
+	case f.Grade == 3:
+		sess.pushChatProbe(27, 26, "", kv) // 稀有鱼 X 千克
+	case newRecord:
+		sess.pushChatProbe(27, 3, "", kv) // 玩家，鱼名 X 千克
+	}
+}
+
+// notifyFishKept 入护播报。
+func (s *Server) notifyFishKept(sess *Session, f *RolledFish) {
+	if sess == nil {
+		return
+	}
+	if text := s.fishKeptText(f); text != "" {
+		sess.pushSystemChat(text)
+	}
+}
+
+// notifyFishReleased 放生播报。
+func (s *Server) notifyFishReleased(sess *Session, f *RolledFish) {
+	if sess == nil {
+		return
+	}
+	if text := s.fishReleasedText(f); text != "" {
+		sess.pushSystemChat(text)
+	}
+}
+
+// escapeTemplateKind 跑鱼原因 → 官方聊天模板类型（401.f0）。
+// 客户端内置本地化模板：4=鱼线轮损坏 5=鱼竿损坏 6=鱼线拉断
+// 7=鱼脱钩 10=牙齿咬断钓组 30=引线(子线)断了。
+var escapeTemplateKind = map[string]int{
+	"脱钩": 7, "脱钩离开": 7, "咬钩未刺中": 7,
+	"断主线": 6, "断子线": 30,
+	"断竿":      5,
+	"渔线轮超载":  4,
+	"钓组组件断裂": 10,
+}
+
+// notifyFishEscape 在鱼丢失（脱钩/断线/超时等）时经聊天频道推送提示。
+// 官方模板样式（"player 鱼线拉断了"）；未知原因回退自由文本。
+func (s *Server) notifyFishEscape(sess *Session, f *RolledFish, reason string) {
+	if s == nil || sess == nil {
+		return
+	}
+	if kind, ok := escapeTemplateKind[reason]; ok {
+		sess.pushChatProbe(27, kind, "", nil)
+		return
+	}
+	if text := s.fishEscapeText(f, reason); text != "" {
+		sess.pushSystemChat(text)
+	}
+}
+
 // bumpFishingCounter 增加玩家钓鱼计数器（escapes 等），幂等累加。
 func (s *Server) bumpFishingCounter(uid int64, key string) {
 	if s.DB == nil {

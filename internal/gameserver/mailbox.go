@@ -660,6 +660,9 @@ type AdminCommand struct {
 	Species      string              `json:"species,omitempty"`  // arm_fish：鱼种（空=默认池随机）
 	WeightG      int64               `json:"weight_g,omitempty"` // arm_fish：克重（空=默认池范围内）
 	Grade        int64               `json:"grade,omitempty"`    // arm_fish：档位 1..4（空=重量定档）
+	Channel      int64               `json:"channel,omitempty"`  // fish_tv_test：聊天推送通道 24..31
+	Kind         int64               `json:"kind,omitempty"`     // fish_tv_test：401.f0 消息类型
+	KVShape      int64               `json:"kv_shape,omitempty"` // fish_tv_test：401.f4 模板 KV 形状 1..3
 }
 
 // StartAdminSubscriber 轮询共享 SQLite 队列，每 2 秒处理一批管理指令。
@@ -812,6 +815,40 @@ func (s *Server) execAdminCmd(cmd *AdminCommand) {
 		s.tunCache = nil // 强制下次读取刷新
 		s.tunMu.Unlock()
 		s.log.Info("管理指令：运行参数已刷新")
+	case "fish_tv_test":
+		// 鱼汛通道探测：向指定玩家（0=全部在线会话）推送一条测试消息。
+		var targets []*Session
+		if cmd.UID != 0 {
+			targets = s.sessionsForUID(cmd.UID)
+		} else {
+			s.mu.Lock()
+			for _, sess := range s.sessions {
+				if sess != nil && !sess.Closed() {
+					targets = append(targets, sess)
+				}
+			}
+			s.mu.Unlock()
+		}
+		text := cmd.Text
+		if text == "" {
+			text = fmt.Sprintf("鱼汛通道测试 ch=%d kind=%d", cmd.Channel, cmd.Kind)
+		}
+		kv := fishTVKvShape(cmd.KVShape, cmd.Species, cmd.WeightG)
+		if cmd.KVShape >= 100 {
+			// 外层参数探测：绕过推送形状守卫。
+			rawVariant := int(cmd.KVShape)
+			for _, sess := range targets {
+				sess.pushChatRaw(rawVariant, int(cmd.Kind), text)
+			}
+			s.log.Info("管理指令：鱼汛外层参数探测", "uid", cmd.UID,
+				"variant", rawVariant, "kind", cmd.Kind, "targets", len(targets))
+			return
+		}
+		for _, sess := range targets {
+			sess.pushChatProbe(int(cmd.Channel), int(cmd.Kind), text, kv)
+		}
+		s.log.Info("管理指令：鱼汛通道测试", "uid", cmd.UID,
+			"channel", cmd.Channel, "kind", cmd.Kind, "kv_shape", cmd.KVShape, "targets", len(targets))
 	case "refresh_player":
 		for _, sess := range s.sessionsForUID(cmd.UID) {
 			sess.Push2_1()

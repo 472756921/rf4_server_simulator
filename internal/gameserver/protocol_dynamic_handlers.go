@@ -132,6 +132,7 @@ func hDynamicRodBreak(ctx *Ctx) ([]byte, bool) {
 			if st.biteTimer != nil {
 				st.biteTimer.Stop()
 			}
+			pending := st.Pending
 			st.Pending = nil
 			st.CastActive = false
 			st.Hooked = false
@@ -166,7 +167,19 @@ func hDynamicRodBreak(ctx *Ctx) ([]byte, bool) {
 			// 断件会改变竿耐久与在装组件；11028 的 f3 更新树不足以刷新客户端
 			// 本地物品模型（组装槽仍可选）。补推 4/22 全量竿线同步强制刷新。
 			ctx.Sess.Push4_22Full()
-			// 断件必丢鱼：pending 已在上方取出置空，按已结算处理。
+			// 断件必丢鱼：11028 只表达装备损坏，另经聊天频道提示跑鱼。
+			reason := "断竿"
+			switch {
+			case outcome.ComponentBroken:
+				reason = "钓组组件断裂"
+			case outcome.ReelDamaged:
+				reason = "渔线轮超载"
+			case outcome.LineBroken && outcome.BreakPart == "leader":
+				reason = "断子线"
+			case outcome.LineBroken:
+				reason = "断主线"
+			}
+			srv.notifyFishEscape(ctx.Sess, pending, reason)
 			return body, true
 		}
 		ctx.Log.Warn("17/9 断件写库失败，回退兼容响应", "rod", shortGUID(rodGUID), "err", err)

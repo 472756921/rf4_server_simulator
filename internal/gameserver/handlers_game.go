@@ -934,14 +934,16 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 		if st.biteTimer != nil {
 			st.biteTimer.Stop()
 		}
-		alreadyResolved := st.Resolved // 17/9 断件路径已结算，避免重复计数
+		pending := st.Pending
+		alreadyResolved := st.Resolved // 17/9 断件路径已播报过，避免双重消息
 		st.Resolved = true
 		st.Pending = nil
 		st.CastActive = false
 		st.Hooked = false
 		st.mu.Unlock()
+		srv.bumpFishingCounter(ctx.Sess.Userid, "escapes")
 		if !alreadyResolved {
-			srv.bumpFishingCounter(ctx.Sess.Userid, "escapes")
+			srv.notifyFishEscape(ctx.Sess, pending, "脱钩")
 		}
 		return nil, true
 	}
@@ -954,13 +956,15 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 	if st.biteTimer != nil {
 		st.biteTimer.Stop()
 	}
+	pending := st.Pending
 	alreadyResolved := st.Resolved
 	st.Resolved = true
 	st.Pending = nil
 	st.CastActive = false
 	st.mu.Unlock()
+	srv.bumpFishingCounter(ctx.Sess.Userid, "escapes")
 	if !alreadyResolved {
-		srv.bumpFishingCounter(ctx.Sess.Userid, "escapes")
+		srv.notifyFishEscape(ctx.Sess, pending, "脱钩离开")
 	}
 	return nil, true
 }

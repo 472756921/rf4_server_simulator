@@ -61,6 +61,7 @@ func NewServer(cfg config.Admin, db *store.DB, log logger, webFS fs.FS) *Server 
 	mux.HandleFunc("GET /api/dashboard", auth(s.handleDashboard))
 	mux.HandleFunc("GET /api/tunables", auth(s.handleTunableList))
 	mux.HandleFunc("POST /api/tunables", auth(s.handleTunableSet))
+	mux.HandleFunc("POST /api/fish_tv_test", auth(s.handleFishTVTest))
 	mux.HandleFunc("GET /api/players", auth(s.handlePlayers))
 	mux.HandleFunc("GET /api/players/detail", auth(s.handlePlayerDetail))
 	mux.HandleFunc("POST /api/players/update", auth(s.handlePlayerUpdate))
@@ -424,8 +425,38 @@ func (s *Server) handleGrantItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true})
 }
 
-func (s *Server) handleKick(w http.ResponseWriter, r *http.Request) {
+// handleFishTVTest 将鱼汛通道测试指令写入共享队列，由主服务器推送到客户端
+// 聊天窗，用于探测 24/27..31 通道与 401.f0 消息类型的客户端表现。
+func (s *Server) handleFishTVTest(w http.ResponseWriter, r *http.Request) {
 	var req struct {
+		UID      int64  `json:"uid"`
+		Channel  int64  `json:"channel"`
+		Kind     int64  `json:"kind"`
+		KVShape  int64  `json:"kv_shape"`
+		Species  string `json:"species"`
+		WeightG  int64  `json:"weight_g"`
+		Text     string `json:"text"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		httpError(w, 400, "参数错误")
+		return
+	}
+	if req.Channel < 24 || req.Channel > 31 {
+		httpError(w, 400, "channel 取值 24..31")
+		return
+	}
+	if req.Kind < 0 {
+		req.Kind = 0
+	}
+	_ = s.db.QueuePush(r.Context(), mustJSON(map[string]any{
+		"op": "fish_tv_test", "uid": req.UID, "channel": req.Channel, "kind": req.Kind,
+		"kv_shape": req.KVShape, "species": req.Species, "weight_g": req.WeightG,
+		"text": req.Text,
+	}))
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+func (s *Server) handleKick(w http.ResponseWriter, r *http.Request) {	var req struct {
 		UID int64 `json:"uid"`
 	}
 	if err := readJSON(r, &req); err != nil || req.UID == 0 {
