@@ -314,3 +314,38 @@ func TestBaitConsumptionThroughBiteAndReplay(t *testing.T) {
 		t.Fatal("next cast did not reserve exactly one replacement")
 	}
 }
+
+func TestMarineBaitConsumptionReloadsAllSlotsInOrder(t *testing.T) {
+	s, db := newRigTestServer(t)
+	ctx := t.Context()
+	const uid int64 = 1000001
+	rod, err := s.CreateItem(ctx, uid, "boatr_10222_SBH80_100", "backpack", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.rigSetType(ctx, uid, rod.GUID, 59) {
+		t.Fatal("marine rig rejected")
+	}
+	ids := []string{"worm_01", "muckworm", "fly"}
+	for i, id := range ids {
+		baitTestMount(t, s, rod.GUID, id, 5, int64(350+i))
+	}
+	snapshot, known := s.biteBaitSnapshot(ctx, rod.GUID)
+	if !known || len(strings.Fields(snapshot)) != len(ids) {
+		t.Fatalf("snapshot=%q", snapshot)
+	}
+	change, err := s.consumeBaitEvent(ctx, uid, rod.GUID, "marine-bite", strings.Fields(snapshot), false)
+	if err != nil || len(change.Removed) != len(ids) {
+		t.Fatalf("deduction=%+v err=%v", change, err)
+	}
+	if _, err := s.reloadBaitForCast(ctx, uid, rod.GUID); err != nil {
+		t.Fatal(err)
+	}
+	for i, id := range ids {
+		guid := s.storedRigComponents(ctx, rod.GUID)[rigCompKey(catBait, int64(i))].GUID
+		row, err := db.GetItemByGUID(ctx, guid)
+		if err != nil || row == nil || row.ItemID != id {
+			t.Fatalf("slot %d: row=%+v want=%s err=%v", i, row, id, err)
+		}
+	}
+}
