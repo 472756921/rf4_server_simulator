@@ -385,6 +385,30 @@ func (d *DB) GetItemDefByItemID(ctx context.Context, itemID string) (*ItemDef, e
 	return def, nil
 }
 
+// ListItemDefsByCategory 按品类读取全部物品定义。
+// 引线制作需要用普通主线的物理参数匹配对应的前导线定义。
+func (d *DB) ListItemDefsByCategory(ctx context.Context, category int64) ([]*ItemDef, error) {
+	rows, err := d.SQL.QueryContext(ctx, `
+		SELECT numeric_id, COALESCE(item_id,''), COALESCE(category,0), COALESCE(kind,''),
+		       COALESCE(brand,''), COALESCE(attrs_json,'')
+		FROM item_def WHERE category=? ORDER BY numeric_id`, category)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*ItemDef
+	for rows.Next() {
+		def := &ItemDef{}
+		if err := rows.Scan(&def.NumericID, &def.ItemID, &def.Category, &def.Kind,
+			&def.Brand, &def.AttrsJSON); err != nil {
+			return nil, err
+		}
+		out = append(out, def)
+	}
+	return out, rows.Err()
+}
+
 // GetItemByGUID 取单个物品行。
 func (d *DB) GetItemByGUID(ctx context.Context, guid string) (*Item, error) {
 	row := d.SQL.QueryRowContext(ctx, `SELECT `+itemCols+` FROM item WHERE guid=?`, guid)
