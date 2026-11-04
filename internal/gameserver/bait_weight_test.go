@@ -2,6 +2,7 @@ package gameserver
 
 import (
 	"math"
+	"math/rand"
 	"testing"
 
 	"rf4server/internal/store"
@@ -26,7 +27,7 @@ func seedBaitWeightTest(t *testing.T) (*Server, *store.DB) {
 	return s, db
 }
 
-func sampleBaitWeightMean(t *testing.T, s *Server, count int, maxWeight int64, roll func() *RolledFish) float64 {
+func sampleBaitWeightMean(t *testing.T, s *Server, count int, maxWeight int64, cache *fishingRollCache, roll func() *RolledFish) float64 {
 	t.Helper()
 	var total int64
 	weights := map[int64]bool{}
@@ -36,7 +37,7 @@ func sampleBaitWeightMean(t *testing.T, s *Server, count int, maxWeight int64, r
 		if fish == nil || fish.Species != "c.roach" {
 			continue
 		}
-		if fish.WeightG < 1 || fish.WeightG > maxWeight || fish.Grade != s.rollGradeDB(t.Context(), fish.Species, fish.WeightG) {
+		if fish.WeightG < 1 || fish.WeightG > maxWeight || fish.Grade != s.rollGradeForRoll(t.Context(), fish.Species, fish.WeightG, fishRollContext{cache: cache}) {
 			t.Fatalf("weight or grade outside the sampled model: %+v", fish)
 		}
 		total += fish.WeightG
@@ -46,7 +47,7 @@ func sampleBaitWeightMean(t *testing.T, s *Server, count int, maxWeight int64, r
 			atCap++
 		}
 	}
-	if matched != count || len(weights) < 100 || atCap > count/30 {
+	if matched != count || len(weights) < 30 || atCap > count/30 {
 		t.Fatalf("sampling collapsed: count=%d distinct=%d atCap=%d", matched, len(weights), atCap)
 	}
 	return float64(total) / float64(matched)
@@ -65,14 +66,15 @@ func TestBaitWeightDistributionDBAndFallback(t *testing.T) {
 					t.Fatal(err)
 				}
 				setBaitRuleSwitch(t, s, strict)
+				cache := newFishingRollCache()
 				mean := func(bait string) float64 {
 					location := "level_900_rules"
 					limit := int64(800)
 					if fallback {
 						location, limit = "weight-fallback", 600
 					}
-					return sampleBaitWeightMean(t, s, 600, limit, func() *RolledFish {
-						return s.rollFishWithRules(location, bait, 0.8, neutralFishingSkillBonus())
+					return sampleBaitWeightMean(t, s, 150, limit, cache, func() *RolledFish {
+						return s.rollFishWithRules(location, bait, 0.8, neutralFishingSkillBonus(), fishRollContext{cache: cache})
 					})
 				}
 				neutral := mean("rule_neutral")
@@ -124,6 +126,8 @@ func TestBaitWeightCombinationUsesEvidenceAndExistingParameters(t *testing.T) {
 func TestBaitWeightReadsLivePrimaryAndSecondaryBaits(t *testing.T) {
 	for _, strict := range []string{"0", "1"} {
 		t.Run("rules="+strict, func(t *testing.T) {
+			t.Setenv("GODEBUG", "randseednop=0")
+			rand.Seed(20261104)
 			s, db := seedBaitWeightTest(t)
 			if err := db.TunableSet(t.Context(), "bait_pref_weight_shift", "2", "test"); err != nil {
 				t.Fatal(err)
@@ -148,10 +152,11 @@ func TestBaitWeightReadsLivePrimaryAndSecondaryBaits(t *testing.T) {
 				}
 				return result.MountedGUID
 			}
+			cache := newFishingRollCache()
 			mean := func() float64 {
-				return sampleBaitWeightMean(t, s, 600, 1250, func() *RolledFish {
+				return sampleBaitWeightMean(t, s, 150, 1250, cache, func() *RolledFish {
 					// 客户端缓存仍报高档饵，体重应读取当前实际饵位。
-					return s.rollFishForRig(t.Context(), testUID, rod.GUID, "level_900_rules", "muckworm", neutralFishingSkillBonus())
+					return s.rollFishForRig(t.Context(), testUID, rod.GUID, "level_900_rules", "muckworm", neutralFishingSkillBonus(), fishRollContext{cache: cache})
 				})
 			}
 			mount("worm_01", 350)

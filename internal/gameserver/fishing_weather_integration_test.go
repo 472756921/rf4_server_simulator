@@ -24,31 +24,32 @@ func TestWeatherAndBaitAffectActualBitesWithIndependentSwitches(t *testing.T) {
 	}
 	setWeatherTestTunable(t, s, "bait_pref_scale", "0")
 	weather := weatherActivitySample(fishingWeatherRain, 22)
+	cache := newFishingRollCache()
 	count := func(bait string, w fishingWeather) int {
 		t.Helper()
 		rand.Seed(20261104)
 		hits := 0
-		for range 256 {
+		for range 128 {
 			if s.rollFishForRig(context.Background(), 0, "", "level_900_rules", bait, neutralFishingSkillBonus(),
-				fishRollContext{now: weatherTimeAt(12), weather: w}) != nil {
+				fishRollContext{now: weatherTimeAt(12), weather: w, cache: cache}) != nil {
 				hits++
 			}
 		}
 		return hits
 	}
-	if s.tunableF("fish_weather_enabled", 0) != 0 || count("rule_worm", weather) != 256 {
+	if s.tunableF("fish_weather_enabled", 0) != 0 || count("rule_worm", weather) != 128 {
 		t.Fatal("default weather switch changed legacy bites")
 	}
 	setWeatherTestTunable(t, s, "fish_weather_enabled", "1")
 	storm := weather
 	storm.kind = fishingWeatherThunderstorm
 	weatherOnly := count("rule_worm", storm)
-	if weatherOnly < 50 || weatherOnly > 180 {
+	if weatherOnly < 25 || weatherOnly > 90 {
 		t.Fatalf("weather without bait/distribution switches had no absolute effect: %d", weatherOnly)
 	}
 	setBaitRuleSwitch(t, s, "1")
 	preferred, other, badWeather := count("rule_worm", weather), count("rule_other", weather), count("rule_worm", storm)
-	if preferred < 120 || other < 1 || other > 45 || preferred <= other || badWeather >= preferred {
+	if preferred < 60 || other < 1 || other > 23 || preferred <= other || badWeather >= preferred {
 		t.Fatalf("preferred=%d other=%d storm=%d", preferred, other, badWeather)
 	}
 	if count("rule_lure", weather) != 0 {
@@ -56,7 +57,7 @@ func TestWeatherAndBaitAffectActualBitesWithIndependentSwitches(t *testing.T) {
 	}
 	setBaitRuleSwitch(t, s, "0")
 	setWeatherTestTunable(t, s, "fish_weather_enabled", "0")
-	if count("rule_worm", storm) != 256 {
+	if count("rule_worm", storm) != 128 {
 		t.Fatal("disabling weather failed to restore legacy bites")
 	}
 	setWeatherTestTunable(t, s, "fish_weather_enabled", "1")

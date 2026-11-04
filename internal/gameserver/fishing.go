@@ -489,7 +489,7 @@ func (s *Server) rollFishWithRules(loc, bait string, gearCapKg float64, bonus fi
 		c.baits = []string{bait}
 	}
 	if s.tunableF("fish_bait_rules_enabled", 0) == 1 {
-		if s.DB != nil && s.DB.ResolveStatLoc(s.dbCtx(), loc) == "" {
+		if s.DB != nil && s.cachedResolveStatLoc(s.dbCtx(), c, loc) == "" {
 			return s.rollFishPoolsWithRules(loc, gearCapKg, bonus, c)
 		}
 		if s.DB == nil {
@@ -502,7 +502,7 @@ func (s *Server) rollFishWithRules(loc, bait string, gearCapKg float64, bonus fi
 			return f
 		}
 		// 已知水域的鱼群无法匹配时保持空竿。
-		if roster, err := s.DB.LocRoster(s.dbCtx(), s.DB.ResolveStatLoc(s.dbCtx(), loc)); err == nil && len(roster) > 0 {
+		if roster, err := s.cachedLocRoster(s.dbCtx(), c, s.cachedResolveStatLoc(s.dbCtx(), c, loc)); err == nil && len(roster) > 0 {
 			return nil
 		}
 	}
@@ -524,11 +524,11 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 	strict := s.tunableF("fish_bait_rules_enabled", 0) == 1
 	distribution := s.tunableF("fish_distribution_enabled", 0) == 1
 	cctx := s.dbCtx()
-	statLoc := s.DB.ResolveStatLoc(cctx, loc)
+	statLoc := s.cachedResolveStatLoc(cctx, c, loc)
 	if statLoc == "" {
 		return nil
 	}
-	roster, err := s.DB.LocRoster(cctx, statLoc)
+	roster, err := s.cachedLocRoster(cctx, c, statLoc)
 	if err != nil || len(roster) == 0 {
 		return nil
 	}
@@ -598,9 +598,9 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 	var tiers map[string]int64
 	var meta map[string]int64
 	if !strict && bait != "" && prefScale > 0 {
-		tiers = s.DB.BaitTiers(cctx, bait)
+		tiers = s.cachedBaitTiers(cctx, c, bait)
 		if tiers != nil {
-			meta = s.DB.CompanionEvidence(cctx)
+			meta = s.cachedCompanionEvidence(cctx, c)
 		}
 	}
 	baitHit := false
@@ -637,7 +637,7 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 		}
 		key := weightedChoice(keys, wts)
 		sample := func() float64 {
-			return float64(s.sampleWeightDB(cctx, key, s.baitWeightMode(key, c.baits), scale, capG))
+			return float64(s.sampleWeightDB(cctx, key, s.baitWeightModeForRoll(key, c.baits, c), scale, capG, c))
 		}
 		w := int64(applyTrophyLuck(sample(), bonus.TrophyLuck, sample))
 		if w == 0 {
@@ -655,8 +655,8 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 		if c.forRig && !c.acceptHappyHourBite(fishingBaitInterest(interest, bonus), s.weatherFishActivity(key, c)) {
 			return nil
 		}
-		grade := s.rollGradeDB(cctx, key, w)
-		lk, lp := s.DB.SpeciesLengthKP(cctx, key)
+		grade := s.rollGradeForRoll(cctx, key, w, c)
+		lk, lp := s.cachedSpeciesLengthKP(cctx, c, key)
 		length := lk * math.Pow(float64(w), lp)
 		length = math.Round(length*100000) / 100000
 		f := &RolledFish{
@@ -689,6 +689,10 @@ func companionTierMult(tier int64) float64 {
 
 // baitWeightMode 沿用饵效档位偏移峰值，组合饵取最强证据，缺少证据时保持原分布。
 func (s *Server) baitWeightMode(species string, baits []string) float64 {
+	return s.baitWeightModeForRoll(species, baits, fishRollContext{})
+}
+
+func (s *Server) baitWeightModeForRoll(species string, baits []string, c fishRollContext) float64 {
 	if s.DB == nil || s.tunableF("bait_pref_scale", 1) <= 0 {
 		return 1
 	}
@@ -703,7 +707,7 @@ func (s *Server) baitWeightMode(species string, baits []string) float64 {
 			continue
 		}
 		seen[bait] = true
-		tier = max(tier, s.DB.BaitTiers(s.dbCtx(), bait)[species])
+		tier = max(tier, s.cachedBaitTiers(s.dbCtx(), c, bait)[species])
 	}
 	if tier < 2 {
 		return 1
@@ -721,8 +725,9 @@ const weightSkewK = 1.6
 
 // sampleWeightDB 按鱼种自然体重分布采样。
 // 在自然体重范围与装备上限的交集中按对数正态分布采样。
-func (s *Server) sampleWeightDB(ctx context.Context, key string, modeMult, scale, capG float64) int64 {
-	val, tro, sup := s.DB.GradeLines(ctx, key)
+func (s *Server) sampleWeightDB(ctx context.Context, key string, modeMult, scale, capG float64, c fishRollContext) int64 {
+	lines := s.cachedGradeLines(ctx, c, key)
+	val, tro, sup := lines.val, lines.trophy, lines.blue
 	var vf, trof, supf float64
 	if val != nil {
 		vf = float64(*val)
@@ -800,6 +805,11 @@ func (s *Server) sampleWeightDB(ctx context.Context, key string, modeMult, scale
 // 缺少某个阈值时只使用已有的分界。
 func (s *Server) rollGradeDB(ctx context.Context, key string, weightG int64) int64 {
 	lines := s.settleStatics(ctx, key)
+	return gradeFromLines(&lines[0], &lines[1], &lines[2], weightG)
+}
+
+func (s *Server) rollGradeForRoll(ctx context.Context, key string, weightG int64, c fishRollContext) int64 {
+	lines := s.cachedSettleStatics(ctx, c, key)
 	return gradeFromLines(&lines[0], &lines[1], &lines[2], weightG)
 }
 
@@ -923,7 +933,7 @@ func (s *Server) rollFishPoolsWithRules(loc string, gearCapKg float64, bonus fis
 	// 饵效移动自然峰值，装备只限制可采样的重量范围。
 	minG, maxG := float64(e.minG), float64(e.maxG)
 	mode := minG + (maxG-minG)*0.3
-	mode = math.Max(minG, math.Min(maxG, mode*s.baitWeightMode(e.species, c.baits)))
+	mode = math.Max(minG, math.Min(maxG, mode*s.baitWeightModeForRoll(e.species, c.baits, c)))
 	upper := maxG
 	if capG > 0 {
 		upper = math.Min(upper, capG/scale)
@@ -939,7 +949,7 @@ func (s *Server) rollFishPoolsWithRules(loc string, gearCapKg float64, bonus fis
 	}
 	weightG := int64(scaled)
 	// 有 species_weight 档位线时按重量判档；缺表时使用内置 valuable 线。
-	grade := s.poolGrade(e, weightG)
+	grade := s.poolGradeForRoll(e, weightG, c)
 	// 体长
 	lp, ok := lengthSeed[e.species]
 	if !ok || lp[0] == 0 {
@@ -996,6 +1006,10 @@ func triangular(min, max, mode float64, upperBounds ...float64) float64 {
 // poolGrade 优先使用 species_weight 档位线；缺表时使用内置池的 valuable 线。
 func (s *Server) poolGrade(e fishPoolEntry, weightG int64) int64 {
 	return s.rollGradeDB(s.dbCtx(), e.species, weightG)
+}
+
+func (s *Server) poolGradeForRoll(e fishPoolEntry, weightG int64, c fishRollContext) int64 {
+	return s.rollGradeForRoll(s.dbCtx(), e.species, weightG, c)
 }
 
 // newFishGUID 随机 16B hex，第 13 个 nibble 固定 '9'。
