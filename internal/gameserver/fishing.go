@@ -1313,6 +1313,7 @@ func (s *Server) scheduleBiteState(sess *Session, st *FishState, preserveHooked,
 	st.cancelPendingTimerLocked()
 	st.castGeneration++
 	st.pushing = nil
+	st.persist.recoverCompleted = false
 	st.CastActive = true
 	st.Resolved = false
 	st.Pending = nil
