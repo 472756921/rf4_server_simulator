@@ -697,6 +697,12 @@ func (s *Server) reloadBaitForCast(ctx context.Context, uid int64, rod string) (
 				return out, err
 			}
 			out.Updated = append(out.Updated, rod, guid, result.MountedGUID)
+			// 客户端只按「新增/移除」更新背包计数，直接推同 guid 的数量变化会被忽略，
+			// 表现为钩上补了饵但背包数量不变。先移除来源栈再随更新段重新加入，
+			// 强制客户端丢弃本地旧栈并采用新数量（与船票租用状态的刷新方式一致）。
+			if !containsGUID(out.Removed, guid) {
+				out.Removed = append(out.Removed, guid)
+			}
 			out.Removed = append(out.Removed, result.RemovedGUIDs...)
 			break
 		}

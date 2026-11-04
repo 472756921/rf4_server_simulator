@@ -362,3 +362,141 @@ func TestMarineBaitConsumptionReloadsAllSlotsInOrder(t *testing.T) {
 		}
 	}
 }
+
+// TestMountBaitRefreshesSourceStackForClient 锁定：计件饵挂载拆出子实例后，
+// 来源背包栈的新数量必须能刷新到客户端（回包后再发一次移除+重加）。
+func TestMountBaitRefreshesSourceStackForClient(t *testing.T) {
+	s, db := newRigTestServer(t)
+	ctx := t.Context()
+	rod := baitTestRod(t, s)
+	item, err := s.CreateItem(ctx, 1000001, "worm_01", "backpack", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.setStackCount(ctx, item, 5)
+	res := s.rigSetComponent(ctx, 1000001, rod, catBait, item.GUID, 350,
+		rigSetOpts{ParentType: familyRod, EnforceCategory: true, SplitStack: true})
+	if res.Rejected || res.MountedGUID == "" {
+		t.Fatalf("挂载失败: %+v", res)
+	}
+	if res.SourceGUID != item.GUID || res.SourceTree == nil {
+		t.Fatalf("挂载未记录来源堆刷新素材: %+v", res)
+	}
+	row, _ := db.GetItemByGUID(ctx, item.GUID)
+	if row == nil || baitQuantity(row) != 4 {
+		t.Fatalf("挂载后来源堆应为 4，实际 %+v", row)
+	}
+	hctx := &Ctx{Sess: newProbeSess(s), Main: 17, Sub: 2, Log: logging.Discard()}
+	s.queueSplitSourceRefresh(hctx, res)
+	if len(hctx.afterResponse) != 1 {
+		t.Fatalf("应在回包后刷新来源堆，回调数 = %d", len(hctx.afterResponse))
+	}
+	hctx.afterResponse[0]()
+}
+
+// TestDetachBaitRefreshesSourceStackForClient 锁定：拆下拆分子实例把数量退回来源堆后，
+// 必须在回包后先移除来源栈再重新加入，否则客户端背包数量不会 +1。
+func TestDetachBaitRefreshesSourceStackForClient(t *testing.T) {
+	s, db := newRigTestServer(t)
+	ctx := t.Context()
+	rod := baitTestRod(t, s)
+	source, child := baitTestMount(t, s, rod, "worm_01", 5, 350)
+	before, _ := db.GetItemByGUID(ctx, source)
+	res := s.rigRemoveItemComponent(ctx, 1000001, rod, child)
+	if res == nil || res.SourceGUID != source || res.SourceTree == nil {
+		t.Fatalf("拆卸未记录来源堆刷新素材: %+v", res)
+	}
+	after, _ := db.GetItemByGUID(ctx, source)
+	if after == nil || baitQuantity(after) != baitQuantity(before)+1 {
+		t.Fatalf("退回后来源堆未 +1: before=%+v after=%+v", before, after)
+	}
+	if len(s.currentBaits(ctx, rod)) != 0 {
+		t.Fatal("拆下后钩上不应再有饵")
+	}
+	hctx := &Ctx{Sess: newProbeSess(s), Main: 17, Sub: 3, Log: logging.Discard()}
+	s.queueSourceStackRefresh(hctx, res)
+	if len(hctx.afterResponse) != 1 {
+		t.Fatalf("应在回包后刷新来源堆，回调数 = %d", len(hctx.afterResponse))
+	}
+	hctx.afterResponse[0]()
+}
+
+// TestBaitReloadRefreshesSourceStackForClient 锁定：自动补饵后必须把来源栈同时放进
+// 移除段，客户端才会丢弃本地旧栈并使用新数量；只推更新段时背包计数不会刷新。
+func TestBaitReloadRefreshesSourceStackForClient(t *testing.T) {
+	s, _ := newRigTestServer(t)
+	ctx := t.Context()
+	rod := baitTestRod(t, s)
+	source, child := baitTestMount(t, s, rod, "worm_01", 5, 350)
+	if _, err := s.consumeBaitEvent(ctx, 1000001, rod, "refresh-bite", []string{child}, false); err != nil {
+		t.Fatal(err)
+	}
+	change, err := s.reloadBaitForCast(ctx, 1000001, rod)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsGUID(change.Removed, source) {
+		t.Fatalf("来源栈 %s 未进入移除段：%+v", source, change)
+	}
+	if !containsGUID(change.Updated, source) {
+		t.Fatalf("来源栈 %s 未进入更新段：%+v", source, change)
+	}
+	if len(change.Removed) != 1 {
+		t.Fatalf("移除段只应包含来源栈，实际 %v", change.Removed)
+	}
+}
+
+// TestBaitRefillsWhenFishIsLanded 锁定：14/11 吃掉钩上的最后一份饵后，14/4 收竿应当
+// 立即补挂同种库存。若把补饵拖到下一次 14/1/14/2，客户端会停在空钩状态，玩家
+// 必须先手动换饵才能抛竿（手杆上鱼一条后鱼饵消失）。
+func TestBaitRefillsWhenFishIsLanded(t *testing.T) {
+	s, db := newRigTestServer(t)
+	ctx := t.Context()
+	rod := baitTestRod(t, s)
+	source, child := baitTestMount(t, s, rod, "worm_01", 5, 350)
+	addFishingRecoverySession(s, 1000001, 939)
+	st := s.stateFor(1000001)
+	fish := &RolledFish{
+		FishGUID: "14a4ba17000000000000000000000000", Species: "c.roach", Grade: 2,
+		WeightG: 300, LengthM: 0.24, BaitsKnown: true, BaitGUIDs: child,
+	}
+	st.mu.Lock()
+	st.GearGuid = rod
+	st.Loc = "unknown-map"
+	st.Bait = "worm_01"
+	st.CastActive, st.InWater = true, true
+	st.CastTs = time.Now().Add(-time.Minute)
+	st.Pending, st.Hooked = fish, false
+	st.mu.Unlock()
+
+	sess := s.liveSessionByUID(1000001)
+	if sess == nil {
+		t.Fatal("no live session")
+	}
+	if _, ok := hFishingHooked(&Ctx{Sess: sess, Main: 14, Sub: 11, Log: logging.Discard()}); !ok {
+		t.Fatal("14/11 未处理")
+	}
+	if got := len(s.currentBaits(ctx, rod)); got != 0 {
+		t.Fatalf("中鱼后钩上饵数 = %d，期望 0", got)
+	}
+	ctx14 := &Ctx{Sess: sess, Main: 14, Sub: 4, ExpectResponse: true, Log: logging.Discard()}
+	body, ok := s.fishingEndSettle(ctx14)
+	if !ok || len(body) == 0 {
+		t.Fatalf("14/4 未处理: ok=%v bytes=%d", ok, len(body))
+	}
+	if len(ctx14.afterResponse) != 1 {
+		t.Fatalf("补饵推送应在 801 回包后执行，回调数 = %d", len(ctx14.afterResponse))
+	}
+	ctx14.afterResponse[0]()
+	if got := len(s.currentBaits(ctx, rod)); got != 1 {
+		t.Fatalf("收竿后钩上应补挂 1 份同种饵，实际 %d", got)
+	}
+	row, _ := db.GetItemByGUID(ctx, source)
+	if row == nil || baitQuantity(row) != 3 {
+		t.Fatalf("补挂应从背包预留 1 份（剩余 3），实际 %+v", row)
+	}
+	var pending int
+	if err := db.SQL.QueryRow(`SELECT COUNT(*) FROM rod_setting WHERE guid=? AND key LIKE 'rebait:%'`, rod).Scan(&pending); err != nil || pending != 0 {
+		t.Fatalf("补挂完成后仍残留补饵请求：%d %v", pending, err)
+	}
+}

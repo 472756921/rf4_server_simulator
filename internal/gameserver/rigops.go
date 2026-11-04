@@ -934,6 +934,8 @@ type rigSetResult struct {
 	AddedTrees   []*proto.Value // nil 表示无新增段（非拆分挂载时 f0 为 null）
 	UpdatedTrees []*proto.Value
 	RemovedGUIDs []string
+	SourceGUID   string       // 拆分挂载后的来源堆 guid（回包后强制刷新客户端计数）
+	SourceTree   *proto.Value // 来源堆减一后的新树
 }
 
 // hasMaterials 判断装配是否产生了新增、更新或移除。
@@ -1003,17 +1005,30 @@ func (s *Server) rigSetComponent(ctx context.Context, uid int64, parentGUID stri
 		_ = s.DB.UpsertRig(ctx, parentGUID, uid, 1, "", "{}")
 	}
 
-	// 计件物品先拆出数量为 1 的挂载子实例；整堆挂载会导致客户端配重错误。
-	// 手持工具例外，需要保留整堆份数。
-	if opts.SplitStack {
-		itemGUID = s.splitMountableChild(ctx, uid, parentGUID, itemGUID)
-	}
-
 	// 800 快照素材：f0 新增，f1 更新（含竿），f2 移除原有子实例 GUID。
 	added := []*proto.Value(nil)
 	updated := []*proto.Value{}
 	var removed []string
 	materialized := false
+
+	// 计件物品先拆出数量为 1 的挂载子实例；整堆挂载会导致客户端配重错误。
+	// 手持工具例外，需要保留整堆份数。
+	if opts.SplitStack {
+		sourceGUID := itemGUID
+		itemGUID = s.splitMountableChild(ctx, uid, parentGUID, itemGUID)
+		if itemGUID != sourceGUID {
+			// 拆分把来源堆数量减一。客户端只按「新增/移除」更新背包计数，
+			// 这里同时提供新树（回包 f1）和回包后的移除+重加刷新。
+			if src, serr := s.DB.GetItemByGUID(ctx, sourceGUID); serr == nil && src != nil {
+				if t, terr := s.itemTree(ctx, src); terr == nil {
+					res.SourceGUID = sourceGUID
+					res.SourceTree = t
+					updated = append(updated, t)
+				}
+			}
+		}
+	}
+
 	if opts.HanditemFullStack {
 		g, srcRemoved := s.materializeHanditemChild(ctx, uid, parentGUID, itemGUID)
 		itemGUID = g
@@ -1401,6 +1416,7 @@ type rigDetachResult struct {
 	DeletedGUID  string       // 整条删除的子实例 guid（f2 移除段素材；退回路径为空）
 	ReturnedTree *proto.Value // 退回背包物品的新树（f1 更新段素材）
 	SourceTree   *proto.Value // 拆分子实例来源堆 +1 后的新树（f1 更新段素材）
+	SourceGUID   string       // 拆分子实例的来源堆 guid（回包后强制刷新客户端计数）
 }
 
 // trees 是应进入 f1 的物品树。
@@ -1522,6 +1538,7 @@ func (s *Server) rigDetachAt(ctx context.Context, parentGUID string, slot, ordin
 						s.setStackCount(ctx, src, s.stackCountOf(ctx, src)+1)
 						if fresh, ferr := s.DB.GetItemByGUID(ctx, srcGUID); ferr == nil && fresh != nil {
 							res.SourceTree, _ = s.itemTree(ctx, fresh)
+							res.SourceGUID = srcGUID
 						}
 					}
 				}
@@ -1749,6 +1766,50 @@ func (s *Server) buildRigSnapshotForParent(ctx context.Context, parentGUID, item
 		removed = append(removed, removedGUID)
 	}
 	return buildRigSnapshot800(added, updated, removed)
+}
+
+// queueSourceStackRefresh 在响应写回后强制刷新来源堆的客户端计数。
+// 客户端只对「移除 + 新增」更新背包数量，同 guid 的数量更新会被忽略；
+// 因此退回拆分子实例后要先 4/21 移除旧栈，再用 4/22 重新加入新数量的树。
+func (s *Server) queueSourceStackRefresh(ctx *Ctx, results ...*rigDetachResult) {
+	if ctx == nil {
+		return
+	}
+	var guids []string
+	var trees []*proto.Value
+	seen := map[string]bool{}
+	for _, res := range results {
+		if res == nil || res.SourceGUID == "" || res.SourceTree == nil || seen[res.SourceGUID] {
+			continue
+		}
+		seen[res.SourceGUID] = true
+		guids = append(guids, res.SourceGUID)
+		trees = append(trees, res.SourceTree)
+	}
+	if len(guids) == 0 {
+		return
+	}
+	s.queueStackRefresh(ctx, guids, trees)
+}
+
+// queueStackRefresh 在回包后「先移除再重新加入」背包栈，强制客户端采用新数量。
+func (s *Server) queueStackRefresh(ctx *Ctx, guids []string, trees []*proto.Value) {
+	if ctx == nil || len(guids) == 0 || len(trees) == 0 {
+		return
+	}
+	sess := ctx.Sess
+	ctx.AfterResponse(func() {
+		sess.Push4_21(guids)
+		sess.Push(4, 22, proto.Args(proto.S("61"), trees...))
+	})
+}
+
+// queueSplitSourceRefresh 在回包后刷新拆分挂载的来源堆计数。
+func (s *Server) queueSplitSourceRefresh(ctx *Ctx, res *rigSetResult) {
+	if res == nil || res.SourceGUID == "" || res.SourceTree == nil {
+		return
+	}
+	s.queueStackRefresh(ctx, []string{res.SourceGUID}, []*proto.Value{res.SourceTree})
 }
 
 // buildDetachSnapshot 构造单件拆卸的响应快照：
@@ -2255,6 +2316,7 @@ func hRodSetComp(ctx *Ctx) ([]byte, bool) {
 	if err != nil {
 		return nil, false
 	}
+	srv.queueSplitSourceRefresh(ctx, res)
 	return body, true
 }
 
@@ -2291,6 +2353,7 @@ func hRodRemoveComp(ctx *Ctx) ([]byte, bool) {
 	if err != nil {
 		return nil, false
 	}
+	srv.queueSourceStackRefresh(ctx, res)
 	return body, true
 }
 
@@ -2313,6 +2376,7 @@ func hRigRemoveAll(ctx *Ctx) ([]byte, bool) {
 	if err != nil {
 		return nil, false
 	}
+	srv.queueSourceStackRefresh(ctx, results...)
 	return body, true
 }
 
@@ -2389,12 +2453,13 @@ func hLureSetComp(ctx *Ctx) ([]byte, bool) {
 		extra = int64(ints[1])
 	}
 	cctx := ctx.Sess.pushCtx()
-	srv.rigSetComponent(cctx, ctx.Sess.Userid, guids[0], 0, guids[1], extra,
+	res := srv.rigSetComponent(cctx, ctx.Sess.Userid, guids[0], 0, guids[1], extra,
 		rigSetOpts{ParentType: familyLure, EnforceCategory: true, SplitStack: true})
 	body, err := proto.EncodeValue(srv.buildRigSnapshotFull(cctx, ctx.Sess.Userid), ctx.Sess.Table())
 	if err != nil {
 		return nil, false
 	}
+	srv.queueSplitSourceRefresh(ctx, res)
 	return body, true
 }
 
@@ -2415,12 +2480,13 @@ func hReelSetComp(ctx *Ctx) ([]byte, bool) {
 		return emptyArgsBody(), true
 	}
 	cctx := ctx.Sess.pushCtx()
-	srv.rigSetComponent(cctx, ctx.Sess.Userid, guids[0], 0, guids[1], 0,
+	res := srv.rigSetComponent(cctx, ctx.Sess.Userid, guids[0], 0, guids[1], 0,
 		rigSetOpts{ParentType: familyReel, EnforceCategory: true, SplitStack: true})
 	body, err := proto.EncodeValue(srv.buildRigSnapshotFull(cctx, ctx.Sess.Userid), ctx.Sess.Table())
 	if err != nil {
 		return nil, false
 	}
+	srv.queueSplitSourceRefresh(ctx, res)
 	return body, true
 }
 
@@ -2524,11 +2590,12 @@ func hHanditemRemoveComp(ctx *Ctx) ([]byte, bool) {
 		itemGUID = guids[1]
 	}
 	cctx := ctx.Sess.pushCtx()
-	srv.rigRemoveItemComponent(cctx, ctx.Sess.Userid, guids[0], itemGUID)
+	res := srv.rigRemoveItemComponent(cctx, ctx.Sess.Userid, guids[0], itemGUID)
 	body, err := proto.EncodeValue(srv.buildRigSnapshotFull(cctx, ctx.Sess.Userid), ctx.Sess.Table())
 	if err != nil {
 		return nil, false
 	}
+	srv.queueSourceStackRefresh(ctx, res)
 	return body, true
 }
 
@@ -2543,11 +2610,12 @@ func hHanditemRemoveAll(ctx *Ctx) ([]byte, bool) {
 		return emptyArgsBody(), true
 	}
 	cctx := ctx.Sess.pushCtx()
-	srv.rigRemoveAll(cctx, ctx.Sess.Userid, guids[0])
+	results := srv.rigRemoveAll(cctx, ctx.Sess.Userid, guids[0])
 	body, err := proto.EncodeValue(srv.buildRigSnapshotFull(cctx, ctx.Sess.Userid), ctx.Sess.Table())
 	if err != nil {
 		return nil, false
 	}
+	srv.queueSourceStackRefresh(ctx, results...)
 	return body, true
 }
 
