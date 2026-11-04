@@ -46,6 +46,16 @@ func (d *DB) Migrate() error {
 	if err := d.ensureLegacyPlayerColumns(); err != nil {
 		return fmt.Errorf("补全玩家表列: %w", err)
 	}
+	// 按文件名识别旧分支，保留同编号的主线迁移。
+	if _, err := d.SQL.Exec(`UPDATE schema_migrations
+		SET version=CASE WHEN name='migrations/00025_bait_consumption.sql' THEN 28 ELSE 30 END,
+		    name=CASE WHEN name='migrations/00025_bait_consumption.sql'
+		      THEN 'migrations/00028_bait_consumption.sql' ELSE 'migrations/00030_cafe_pricing_version.sql' END
+		WHERE name IN ('migrations/00023_cafe_pricing_version.sql','migrations/00025_cafe_pricing_version.sql',
+		               'migrations/00027_cafe_pricing_version.sql','migrations/00029_cafe_pricing_version.sql',
+		               'migrations/00025_bait_consumption.sql')`); err != nil {
+		return fmt.Errorf("兼容旧分支迁移编号: %w", err)
+	}
 	entries, err := fs.Glob(migrationsFS, "migrations/*.sql")
 	if err != nil {
 		return err
