@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"rf4server/internal/proto"
 	"rf4server/internal/store"
@@ -34,6 +35,8 @@ func hStoreList(ctx *Ctx) ([]byte, bool) {
 		ctx.Log.Warn("读取商店货架失败", "store", storeID, "err", err)
 		items = nil
 	}
+	// 房产货架行必须保留：实测缺失时客户端点击房屋直接转圈（房屋 UI 的
+	// 必要数据源），所有权改由档案 f20/f22 携带（见 profilebuild.go）。
 	for _, p := range items {
 		out.Items = append(out.Items, wiregen.MustMakeObj("ifdefblccde", map[int]*proto.Value{
 			0: proto.StrVal(p.ItemID),
@@ -277,8 +280,14 @@ func hStoreReturn(ctx *Ctx) ([]byte, bool) {
 	return body, true
 }
 
-// hStoreATMQuery 处理 22/6，固定返回 false 且不修改货币。
+// hStoreATMQuery 处理 22/6。实抓证据（2026-11-04 trace）：客户端在房产
+// 购买流程中每次 3/33 之后都会发送 [store_id, filetime]，据此判断支付/
+// 结算是否完成；回 false 会让客户端停在购买界面循环。房产商店回 true
+// 放行结算；其余商店维持既有 false 行为，不影响 ATM 钱包商店。
 func hStoreATMQuery(ctx *Ctx) ([]byte, bool) {
+	if strs := treeStrs(ctx.Tree); len(strs) > 0 && strings.HasPrefix(strs[0], "housestore_") {
+		return []byte{0x0E}, true
+	}
 	return []byte{0x0F}, true
 }
 
