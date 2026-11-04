@@ -61,6 +61,7 @@ func NewServer(cfg config.Admin, db *store.DB, log logger, webFS fs.FS) *Server 
 	mux.HandleFunc("GET /api/dashboard", auth(s.handleDashboard))
 	mux.HandleFunc("GET /api/tunables", auth(s.handleTunableList))
 	mux.HandleFunc("POST /api/tunables", auth(s.handleTunableSet))
+	mux.HandleFunc("POST /api/fish_tv_test", auth(s.handleFishTVTest))
 	mux.HandleFunc("GET /api/players", auth(s.handlePlayers))
 	mux.HandleFunc("GET /api/players/detail", auth(s.handlePlayerDetail))
 	mux.HandleFunc("POST /api/players/update", auth(s.handlePlayerUpdate))
@@ -421,6 +422,35 @@ func (s *Server) handleGrantItem(w http.ResponseWriter, r *http.Request) {
 	}))
 	_ = s.db.AuditLogWrite(r.Context(), adminOf(r), "grant_item",
 		strconv.FormatInt(req.UID, 10), fmt.Sprintf("%s x%d", req.ItemID, req.Qty))
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+// handleFishTVTest 将鱼汛通道测试指令写入共享队列，由主服务器推送到客户端
+// 聊天窗，用于探测 24/27..31 通道与 401.f0 消息类型的客户端表现；负 kind 用于参数位探测。
+func (s *Server) handleFishTVTest(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		UID     int64  `json:"uid"`
+		Channel int64  `json:"channel"`
+		Kind    int64  `json:"kind"`
+		KVShape int64  `json:"kv_shape"`
+		Text    string `json:"text"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		httpError(w, 400, "参数错误")
+		return
+	}
+	if req.Channel < 27 || req.Channel > 31 {
+		httpError(w, 400, "channel 取值 27..31")
+		return
+	}
+	if req.Kind < -36 || req.Kind > 36 {
+		httpError(w, 400, "kind 取值 -36..36")
+		return
+	}
+	_ = s.db.QueuePush(r.Context(), mustJSON(map[string]any{
+		"op": "fish_tv_test", "uid": req.UID, "channel": req.Channel, "kind": req.Kind,
+		"kv_shape": req.KVShape, "text": req.Text,
+	}))
 	writeJSON(w, map[string]any{"ok": true})
 }
 

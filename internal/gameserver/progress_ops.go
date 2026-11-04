@@ -341,6 +341,7 @@ func (s *Server) fishingEndSettle(ctx *Ctx) ([]byte, bool) {
 	if pending != nil && !hooked {
 		// 鱼已咬钩但玩家未刺中，记录一次逃脱。
 		s.bumpFishingCounter(uid, "escapes")
+		s.notifyFishEscape(ctx.Sess, pending, "咬钩未刺中")
 	}
 	var res *settleXpResult
 	if hasFish {
@@ -351,6 +352,8 @@ func (s *Server) fishingEndSettle(ctx *Ctx) ([]byte, bool) {
 		st.mu.Lock()
 		st.LastSkill = res.skillID
 		st.mu.Unlock()
+		// 奖杯/蓝冠与破纪录经聊天频道播报；普通鱼由结算卡展示。
+		s.notifyFishLanded(ctx.Sess, pending, res.isRecord)
 	}
 
 	// 801 即使空竿也返回完整对象，f0/f6/f7 为 null。
@@ -390,6 +393,8 @@ func (s *Server) fishingEndSettle(ctx *Ctx) ([]byte, bool) {
 	// 结算后推送升级和最新档案；多级连升只推送一次。
 	if hasFish && res != nil && res.levelsGained > 0 {
 		ctx.Sess.Push2_6(max64(1, res.newLevel-1))
+		// 官方聊天模板播报升级（k00；f2 填等级的 f32 位模式）。
+		ctx.Sess.pushLevelUpChat(res.newLevel)
 	}
 	if hasFish {
 		ctx.Sess.Push2_1()

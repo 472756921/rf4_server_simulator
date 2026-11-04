@@ -319,6 +319,7 @@ func (s *Server) fishingKeep(ctx *Ctx) ([]byte, bool) {
 			st.Keepnet = append(st.Keepnet, &kept)
 		}
 		st.mu.Unlock()
+		s.notifyFishKept(ctx.Sess, &kept)
 		out := proto.Args(proto.S("61"))
 		if keptInNet {
 			out.Items = append(out.Items, s.buildPending25(&kept, st, keepLevel))
@@ -418,6 +419,7 @@ func (s *Server) fishingRelease(ctx *Ctx) ([]byte, bool) {
 				ctx.Sess.Push2_6(max64(1, newLevel-1))
 			}
 		}
+		s.notifyFishReleased(ctx.Sess, pending)
 	}
 	// 响应 807：{null, null, 307, null, null, null}
 	profileTree, err := s.BuildProfile307(ctx.Sess.pushCtx(), uid)
