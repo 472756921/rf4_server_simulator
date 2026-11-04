@@ -355,6 +355,7 @@ func (s *Session) pushChatProbe(channel, kind int, text string, kv *proto.Value)
 	outerStr := ""
 	outerU32 := uint32(0)
 	haveOuter := false
+	outerEmpty := false
 	switch kind {
 	case -26: // 探测专用：重量裸值放 f2
 		kind = 26
@@ -381,6 +382,11 @@ func (s *Session) pushChatProbe(channel, kind int, text string, kv *proto.Value)
 		kind = 25
 	case -36: // f1=重量数字文本，k03 普通钓获模板
 		kind = 3
+	case -37: // 探测专用：外层 locationId 传空串。客户端 ibopligjjbo.peilhchjenn
+		// 对 locationId 与当前频道名做严格相等校验，仅空串无条件放行
+		// （反编译 Assembly-CSharp/ibopligjjbo.cs 2026-11-04 核对）。
+		kind = 0
+		outerStr, outerU32, haveOuter, outerEmpty = "", 0, true, true
 	}
 	ch := sessChannel(s)
 	users := ch.Users
@@ -404,11 +410,16 @@ func (s *Session) pushChatProbe(channel, kind int, text string, kv *proto.Value)
 		s.Push(24, uint8(channel), proto.Args524(msgObj, proto.StrVal(ch.Name)))
 	case 30, 31:
 		s.Push(24, uint8(channel), proto.Args524(msgObj))
-	default: // 27 及一切未知值回退到已验证的公聊回显形状
-		str2 := proto.StrVal(ch.Name)
+	default: // 27 及一切未知值回退到公聊回显形状
+		// 外层 locationId 必须与客户端当前频道的名字严格相等才会被接受
+		// （Assembly-CSharp ibopligjjbo.peilhchjenn 实证，2026-11-04 面板
+		// 通道测试 D2/E2 对照确认）；我们无法保证 sessChannel 与客户端
+		// 当前标签页一致，统一发空串——客户端对空串无条件放行，消息
+		// 落进玩家当前打开的频道。
+		str2 := proto.StrVal("")
 		u3 := proto.U32(uint32(users))
 		if haveOuter {
-			if outerStr != "" {
+			if outerStr != "" || outerEmpty {
 				str2 = proto.StrVal(outerStr)
 			}
 			u3 = proto.U32(outerU32)
@@ -700,8 +711,10 @@ func hSocialPublic(ctx *Ctx) ([]byte, bool) {
 		return nil, true
 	}
 	ch := sessChannel(ctx.Sess)
-	// 24/27 args[1] 必须与 24/3 godhiicbgng.f0 完全一致；带 [CN] 会被客户端当作别的频道丢弃。
-	loc := ch.Name
+	// 外层 locationId 发空串：客户端 peilhchjenn 对频道名做严格相等校验，
+	// 带 [CN] 或 sessChannel 默认名都不匹配当前标签页而被静默丢弃；空串
+	// 无条件放行（与 pushChatProbe 同一结论，2026-11-04 反编译+对照实证）。
+	loc := ""
 	users := ch.Users
 	if users < 1 {
 		users = 1
