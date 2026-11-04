@@ -1555,20 +1555,25 @@ func (s *Server) fishEscapeText(f *RolledFish, reason string) string {
 		s.speciesZhName(s.dbCtx(), f.Species), formatWeightG(f.WeightG), reason)
 }
 
-// notifyFishLanded 钓获结算播报（官方模板）：蓝冠 k25、奖杯 k26、
-// 破纪录 k03；普通鱼由结算卡展示不播报。模板的鱼名/重量参数编码
-// 未破解（见 fish_tv_test 探测），暂显示占位值。
+// notifyFishLanded 播报蓝冠、奖杯和破纪录；普通鱼由结算卡展示。
 func (s *Server) notifyFishLanded(sess *Session, f *RolledFish, newRecord bool) {
 	if sess == nil || f == nil {
 		return
 	}
+	// 官方模板参数：键1=鱼种key（客户端本地化），键2=重量克（/1000 千克）。
+	// fish_tv_kv 默认 0：KV 推送曾在客户端触发解析异常断连（回登录界面），
+	// 编码经面板 kv_shape=30 探测确认后置 1 启用。
+	var kv *proto.Value
+	if s.tunableF("fish_tv_kv", 0) != 0 {
+		kv = fishTVKv(f.Species, f.WeightG)
+	}
 	switch {
 	case f.Grade >= 4:
-		sess.pushChatProbe(27, 25, "", nil) // 超级稀有鱼
+		sess.pushChatProbe(27, 25, "", kv) // 超级稀有鱼 X 千克
 	case f.Grade == 3:
-		sess.pushChatProbe(27, 26, "", nil) // 稀有鱼
+		sess.pushChatProbe(27, 26, "", kv) // 稀有鱼 X 千克
 	case newRecord:
-		sess.pushChatProbe(27, 3, "", nil) // player，X 克
+		sess.pushChatProbe(27, 3, "", kv) // 玩家，鱼名 X 千克
 	}
 }
 

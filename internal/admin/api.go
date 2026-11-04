@@ -428,21 +428,23 @@ func (s *Server) handleGrantItem(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleFishTVTest 将鱼汛通道测试指令写入共享队列，由主服务器推送到客户端
-// 聊天窗，用于探测 24/27..31 通道与 401.f0 消息类型的客户端表现；负 kind 用于参数位探测。
+// 聊天窗，用于探测 24/27..31 通道、401.f0 消息类型和 401.f4 模板参数。
 func (s *Server) handleFishTVTest(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		UID     int64  `json:"uid"`
 		Channel int64  `json:"channel"`
 		Kind    int64  `json:"kind"`
 		KVShape int64  `json:"kv_shape"`
+		Species string `json:"species"`
+		WeightG int64  `json:"weight_g"`
 		Text    string `json:"text"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		httpError(w, 400, "参数错误")
 		return
 	}
-	if req.Channel < 27 || req.Channel > 31 {
-		httpError(w, 400, "channel 取值 27..31")
+	if req.Channel < 24 || req.Channel > 31 {
+		httpError(w, 400, "channel 取值 24..31")
 		return
 	}
 	if req.Kind < -36 || req.Kind > 36 {
@@ -451,11 +453,11 @@ func (s *Server) handleFishTVTest(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = s.db.QueuePush(r.Context(), mustJSON(map[string]any{
 		"op": "fish_tv_test", "uid": req.UID, "channel": req.Channel, "kind": req.Kind,
-		"kv_shape": req.KVShape, "text": req.Text,
+		"kv_shape": req.KVShape, "species": req.Species, "weight_g": req.WeightG,
+		"text": req.Text,
 	}))
 	writeJSON(w, map[string]any{"ok": true})
 }
-
 func (s *Server) handleKick(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		UID int64 `json:"uid"`

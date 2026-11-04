@@ -500,6 +500,20 @@ func (s *Session) pushChatRaw(variant, kind int, text string) {
 	s.PushRaw(24, sub, bodyBytes)
 }
 
+// fishTVKv 构造 401.f4 的鱼名和重量参数。
+func fishTVKv(fishKey string, weightG int64) *proto.Value {
+	if fishKey == "" {
+		fishKey = "g_tench"
+	}
+	if weightG < 0 {
+		weightG = 0
+	}
+	return proto.KVList(
+		proto.KVEntry{Key: 1, Val: proto.StrVal(fishKey)},
+		proto.KVEntry{Key: 2, Val: proto.U32(uint32(weightG))},
+	)
+}
+
 // fishTVKvShape 按 shape 编号构造 401.f4 钓获模板 KV 参数（键1=鱼种key
 // 键2=重量 键6=榜单类型），用于探测客户端的模板渲染形状。
 func fishTVKvShape(shape int64, fishKey string, weightG int64) *proto.Value {
@@ -584,6 +598,36 @@ func fishTVKvShape(shape int64, fishKey string, weightG int64) *proto.Value {
 			2: proto.U32(3),
 			4: proto.U32(uint32(w)),
 		})
+	case 30:
+		// 官方 KV 数组，附加榜单类型键 6。
+		w, _ := strconv.ParseInt(v2, 10, 64)
+		list := fishTVKv(v1, w)
+		return &proto.Value{Kind: proto.KindKVList, Items: append(list.Items,
+			&proto.Value{Kind: proto.KindKVEntry, Marker: 6, Items: []*proto.Value{proto.StrVal(v6)}})}
+	case 40:
+		return &proto.Value{Kind: proto.KindKVList}
+	case 41:
+		w, _ := strconv.ParseInt(v2, 10, 64)
+		return proto.KVList(proto.KVEntry{Key: 2, Val: proto.U32(uint32(w))})
+	case 42:
+		return proto.KVList(proto.KVEntry{Key: 1, Val: proto.StrVal(v1)})
+	case 43:
+		w, _ := strconv.ParseInt(v2, 10, 64)
+		return &proto.Value{Kind: proto.KindKVArr, Items: []*proto.Value{
+			{Kind: proto.KindKVEntry, Marker: 1, Items: []*proto.Value{proto.StrVal(v1)}},
+			{Kind: proto.KindKVEntry, Marker: 2, Items: []*proto.Value{proto.U32(uint32(w))}},
+		}}
+	case 44:
+		return &proto.Value{Kind: proto.KindTypedArr, TypeName: "System.String"}
+	case 45:
+		return &proto.Value{Kind: proto.KindTypedArr, TypeName: "dejdolfnooh, Assembly-CSharp"}
+	case 50:
+		return &proto.Value{Kind: proto.KindTypedArr, TypeName: v1}
+	case 51:
+		w, _ := strconv.ParseInt(v2, 10, 64)
+		return proto.KVListCustom(v1,
+			proto.KVEntry{Key: 1, Val: proto.StrVal(v1)},
+			proto.KVEntry{Key: 2, Val: proto.U32(uint32(w))})
 	}
 	return nil
 }

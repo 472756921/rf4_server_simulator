@@ -999,6 +999,7 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 			st.biteTimer = nil
 		}
 		pending := st.Pending
+		alreadyResolved := st.Resolved
 		st.Pending = nil
 		st.PushSent = false
 		st.Hooked = false
@@ -1006,7 +1007,7 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 		castActive := st.CastActive
 		inWater := st.InWater
 		st.mu.Unlock()
-		if pending != nil {
+		if !alreadyResolved {
 			srv.notifyFishEscape(ctx.Sess, pending, "脱钩离开")
 		}
 		if castActive && inWater {
@@ -1019,12 +1020,15 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 		st.biteTimer.Stop()
 	}
 	pending := st.Pending
+	alreadyResolved := st.Resolved
 	st.Resolved = true
 	st.Pending = nil
 	st.CastActive = false
 	st.mu.Unlock()
 	srv.bumpFishingCounter(ctx.Sess.Userid, "escapes")
-	srv.notifyFishEscape(ctx.Sess, pending, "脱钩离开")
+	if !alreadyResolved {
+		srv.notifyFishEscape(ctx.Sess, pending, "脱钩离开")
+	}
 	return nil, true
 }
 

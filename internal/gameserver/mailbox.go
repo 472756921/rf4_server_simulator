@@ -696,9 +696,9 @@ type AdminCommand struct {
 	Species      string              `json:"species,omitempty"`  // arm_fish：鱼种（空=默认池随机）
 	WeightG      int64               `json:"weight_g,omitempty"` // arm_fish：克重（空=默认池范围内）
 	Grade        int64               `json:"grade,omitempty"`    // 兼容旧指令；实际档位按结算尺和重量计算。
-	Channel      int64               `json:"channel,omitempty"`  // fish_tv_test：聊天推送通道 27..31
+	Channel      int64               `json:"channel,omitempty"`  // fish_tv_test：聊天推送通道 24..31
 	Kind         int64               `json:"kind,omitempty"`     // fish_tv_test：401.f0 消息类型；负值为参数位探测
-	KVShape      int64               `json:"kv_shape,omitempty"` // fish_tv_test：401.f4 模板 KV 形状
+	KVShape      int64               `json:"kv_shape,omitempty"` // fish_tv_test：401.f4 模板 KV 形状或外层参数探测编号
 }
 
 // StartAdminSubscriber 轮询共享 SQLite 队列，每 2 秒处理一批管理指令。
