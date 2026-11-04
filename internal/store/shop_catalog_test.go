@@ -36,7 +36,7 @@ func findShopPrice(t *testing.T, rows []*ShopPrice, itemID string) *ShopPrice {
 
 func TestEmbeddedShopCatalogMatchesEvidenceAndCoversAllStores(t *testing.T) {
 	sum := sha256.Sum256(embeddedShopKindDefs)
-	const wantHash = "ce050b6f5bfbe76449cbca9ef2a998419a3440d04b494323f1bb18412878a522"
+	const wantHash = "cbf7494f46f9f0768bd38a282e3780389b02b1b95a649d179f2d457c2b15f72d"
 	if got := hex.EncodeToString(sum[:]); got != wantHash {
 		t.Fatalf("商店目录 hash=%s want=%s", got, wantHash)
 	}
@@ -47,8 +47,8 @@ func TestEmbeddedShopCatalogMatchesEvidenceAndCoversAllStores(t *testing.T) {
 	if len(catalog.Stores) != 205 {
 		t.Fatalf("商店目录 stores=%d want=205", len(catalog.Stores))
 	}
-	if len(catalog.Kinds) != 7 {
-		t.Fatalf("商店目录 kinds=%d want=7", len(catalog.Kinds))
+	if len(catalog.Kinds) != 8 {
+		t.Fatalf("商店目录 kinds=%d want=8", len(catalog.Kinds))
 	}
 
 	db := openShopCatalogTestDB(t)
@@ -76,7 +76,7 @@ func TestEmbeddedShopCatalogMatchesEvidenceAndCoversAllStores(t *testing.T) {
 			t.Fatalf("缺证据商店来源=%q want=%q", view.ShelfSource, shopShelfSourceMissing)
 		}
 	}
-	if nonempty != 184 || missingEvidence != 21 {
+	if nonempty != 187 || missingEvidence != 18 {
 		t.Fatalf("205 店覆盖异常: nonempty=%d missing=%d", nonempty, missingEvidence)
 	}
 }
