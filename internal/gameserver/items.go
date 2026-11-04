@@ -64,11 +64,12 @@ var categoryWireClass = map[int64]wireClassEntry{
 	50: {"jjikombcnnj", 614}, // 轮手柄
 	51: {"gaoapgffamm", 615}, // 星形制动
 	52: {"ibinolcnogf", 610},
-	53: {"phdkhaocdai", 611},  // 齿轮 LED
-	54: {"gpldfemlfch", 612},  // 蜗杆轴
-	59: {"iknkgeomkip", 3200}, // Cobra 打窝器
-	60: {"ifnaghdaolg", 3201}, // Slingshot 弹弓
-	81: {"kbpmmclfipg", 1470}, // 渔轮电机（装在轮 f14 扩展槽，DTO odlknjlbooh）
+	53: {"phdkhaocdai", 611},   // 齿轮 LED
+	54: {"gpldfemlfch", 612},   // 蜗杆轴
+	59: {"iknkgeomkip", 3200},  // Cobra 打窝器
+	60: {"ifnaghdaolg", 3201},  // Slingshot 弹弓
+	79: {"abmokghdbhf", 11500}, // 竿架（rod pod），客户端模型 pphmpibfgea
+	81: {"kbpmmclfipg", 1470},  // 渔轮电机（装在轮 f14 扩展槽，DTO odlknjlbooh）
 }
 
 const fallbackWireClass = "ohciikgjghe"
