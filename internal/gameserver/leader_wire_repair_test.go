@@ -2,7 +2,6 @@ package gameserver
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"rf4server/internal/proto"
@@ -86,15 +85,7 @@ func TestRepairCraftedLeaderWireMapsLegacyLineAndQuarantinesUnknown(t *testing.T
 
 func newLeaderTestServer(t *testing.T) (*Server, *store.DB) {
 	t.Helper()
-	db, err := store.Open(filepath.Join(t.TempDir(), "leader-wire.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	if err := db.Migrate(); err != nil {
-		t.Fatal(err)
-	}
-	importStaticForSkillsCraft(t, db, "item_def")
+	db := openItemTestDB(t)
 	return newSkillsCraftServer(t, db), db
 }
 

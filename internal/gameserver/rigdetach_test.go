@@ -6,7 +6,6 @@ package gameserver
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"rf4server/internal/config"
@@ -18,17 +17,9 @@ import (
 // newDetachTestServer 创建使用独立数据库的测试服务器。
 func newDetachTestServer(t *testing.T) (*Server, *store.DB) {
 	t.Helper()
-	db, err := store.Open(filepath.Join(t.TempDir(), "rigdetach.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	if err := db.Migrate(); err != nil {
-		t.Fatal(err)
-	}
+	db := openItemTestDB(t)
 	srv := NewServer(config.Game{Tunnel: config.Tunnel{PSK: "detach"}}, logging.Discard(), nil)
 	srv.SetDB(db)
-	importStaticForProbe(t, db)
 	return srv, db
 }
 
