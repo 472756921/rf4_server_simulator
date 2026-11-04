@@ -205,10 +205,8 @@ func (s *Server) BuildSkillTree311(ctx context.Context, uid int64, availablePoin
 	if err != nil {
 		return nil, err
 	}
-	nodes := effects.Learned
-
 	total := skillPointsTotal(p.Level) + s.skillBonusPoints(ctx, uid)
-	used := store.CountSkillNodePoints(nodes)
+	used := s.skillSpentPoints(ctx, uid)
 	avail := uint64(0)
 	if total > used {
 		avail = uint64(total - used)

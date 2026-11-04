@@ -36,7 +36,7 @@ func TestSharedSkillPartialWriteAndResetRollBackTogether(t *testing.T) {
 		t.Fatal(err)
 	}
 	node := int64(501)
-	if err := srv.resetSkillNodes(ctx, sharedSkillUID, &node); err == nil {
+	if err := srv.resetSkillNodes(ctx, sharedSkillUID, 1, &node); err == nil {
 		t.Fatal("partial shared reset succeeded")
 	}
 	var sum int64
@@ -133,19 +133,19 @@ func TestSharedSkillResetRefundsOneAllocationAndPreservesExtraPoints(t *testing.
 		t.Fatal("same group number merged across fishing categories or extra points changed")
 	}
 	peer := int64(503)
-	if err := srv.resetSkillNodes(ctx, sharedSkillUID, &peer); err != nil {
+	if err := srv.resetSkillNodes(ctx, sharedSkillUID, 1, &peer); err != nil {
 		t.Fatal(err)
 	}
 	if sharedSkillRank(t, srv, 501) != 0 || sharedSkillRank(t, srv, 503) != 0 || sharedSkillRank(t, srv, 702) != 2 || srv.skillAvailablePoints(ctx, sharedSkillUID) != 27 {
 		t.Fatal("reset did not clear the selected shared pair and refund exactly four points")
 	}
-	if err := srv.resetSkillNodes(ctx, sharedSkillUID, &peer); err != nil {
+	if err := srv.resetSkillNodes(ctx, sharedSkillUID, 1, &peer); err != nil {
 		t.Fatal(err)
 	}
 	if srv.skillAvailablePoints(ctx, sharedSkillUID) != 27 {
 		t.Fatal("repeated shared reset refunded points again")
 	}
-	if err := srv.resetSkillNodes(ctx, sharedSkillUID, nil); err != nil {
+	if err := srv.resetSkillNodes(ctx, sharedSkillUID, 0, nil); err != nil {
 		t.Fatal(err)
 	}
 	if srv.skillAvailablePoints(ctx, sharedSkillUID) != 29 || srv.skillBonusPoints(ctx, sharedSkillUID) != 20 {
@@ -213,6 +213,29 @@ func TestSharedSkillLegacyReadPreservesCurrentPointBalanceAndRawRecords(t *testi
 		t.Fatal(err)
 	}
 	rows.Close()
+	ident, err := srv.DB.LoadSkillIdentity(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	excluded := map[int64]bool{501: true, 503: true, 702: true, 708: true}
+	seenIdentities := map[int64]bool{}
+	var unique []entry
+	for _, e := range entries {
+		group := ident.Group(e.id)
+		blocked := false
+		for _, node := range group {
+			if excluded[node] {
+				blocked = true
+				break
+			}
+		}
+		if blocked || seenIdentities[group[0]] {
+			continue
+		}
+		seenIdentities[group[0]] = true
+		unique = append(unique, e)
+	}
+	entries = unique
 	remaining := int64(64)
 	for _, e := range entries {
 		if remaining == 0 {

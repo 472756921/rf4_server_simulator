@@ -17,6 +17,12 @@ func sharedSkillStoreTestDB(t *testing.T) *DB {
 	if err := db.Migrate(); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.SQL.Exec(`INSERT OR IGNORE INTO skill_def(cat_id,node_id,group_id) VALUES
+		(1,501,1),(1,503,1),(2,702,1),(2,708,1),
+		(1,514,0),(2,701,0),(3,313,0),(11,1002,0),
+		(2,718,20),(2,721,20),(11,1008,2),(11,1020,2)`); err != nil {
+		t.Fatal(err)
+	}
 	return db
 }
 
@@ -141,23 +147,68 @@ func TestSharedSkillNodeWritesAreAtomicAndOtherNodesStayIndependent(t *testing.T
 	}
 }
 
-func TestSharedSkillProjectionDoesNotMergeCategoriesOrMutateInput(t *testing.T) {
-	input := map[int64]int64{501: 2, 503: 5, 702: 1, 9101: 4, 9102: 3}
-	projected := ProjectSharedSkillNodes(input)
-	if input[501] != 2 || projected[501] != 5 || projected[503] != 5 || projected[702] != 1 || projected[708] != 1 {
-		t.Fatalf("projection modified input or mixed categories: input=%v projection=%v", input, projected)
-	}
-	if CountSkillNodePoints(input) != 13 || CountSkillNodePoints(projected) != 13 {
-		t.Fatal("point cost depends on duplicate stored rows")
-	}
-	if !reflect.DeepEqual(SharedSkillNodeIDs(1, 501), []int64{501, 503}) || !reflect.DeepEqual(SharedSkillNodeIDs(2, 708), []int64{702, 708}) {
-		t.Fatal("confirmed shared pair missing")
-	}
-	if !reflect.DeepEqual(SharedSkillNodeIDs(1, 702), []int64{702}) || !reflect.DeepEqual(SharedSkillNodeIDs(3, 9101), []int64{9101}) {
-		t.Fatal("unconfirmed category or group was merged")
-	}
+func TestSkillIdentityProjectsGroupsAndLinksWithoutMutatingInput(t *testing.T) {
 	db := sharedSkillStoreTestDB(t)
+	ident, err := db.LoadSkillIdentity(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ident.Group(514); !reflect.DeepEqual(got, []int64{313, 514, 701, 1002}) {
+		t.Fatalf("spinning reel link=%v", got)
+	}
+	if got := ident.Group(718); !reflect.DeepEqual(got, []int64{718, 721, 1008, 1020}) {
+		t.Fatalf("power reel group=%v", got)
+	}
+	input := map[int64]int64{514: 2, 701: 5, 313: 1, 1002: 3, 718: 2, 721: 3, 1008: 4, 1020: 1}
+	projected := ident.Project(input)
+	for _, node := range []int64{514, 701, 313, 1002} {
+		if projected[node] != 5 {
+			t.Fatalf("spinning reel node %d=%d", node, projected[node])
+		}
+	}
+	for _, node := range []int64{718, 721, 1008, 1020} {
+		if projected[node] != 4 {
+			t.Fatalf("power reel node %d=%d", node, projected[node])
+		}
+	}
+	if input[514] != 2 || ident.SpentPoints(input) != 9 {
+		t.Fatalf("input mutated=%v spent=%d", input, ident.SpentPoints(input))
+	}
 	if got, err := db.SkillNodeLevelSum(context.Background(), 99); err != nil || got != 0 {
 		t.Fatalf("empty character points=%d err=%v", got, err)
+	}
+}
+
+func TestSkillLinkMigrationUpgradesExistingSkillRows(t *testing.T) {
+	db := sharedSkillStoreTestDB(t)
+	ctx := context.Background()
+	const uid = int64(45)
+	if _, err := db.SQL.Exec(`DROP TABLE skill_link;
+		DELETE FROM schema_migrations WHERE version=34;
+		INSERT INTO skill_node(uid,node_id,level) VALUES(?,514,2),(?,701,1),(?,1002,0)`, uid, uid, uid); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	nodes, err := db.ListSkillNodes(ctx, uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, node := range []int64{514, 701, 313, 1002} {
+		if nodes[node] != 2 {
+			t.Fatalf("node %d=%d", node, nodes[node])
+		}
+	}
+	var raw int64
+	if err := db.SQL.QueryRow(`SELECT level FROM skill_node WHERE uid=? AND node_id=701`, uid).Scan(&raw); err != nil || raw != 1 {
+		t.Fatalf("raw level=%d err=%v", raw, err)
+	}
+	if spent, err := db.SkillNodeLevelSum(ctx, uid); err != nil || spent != 2 {
+		t.Fatalf("spent=%d err=%v", spent, err)
+	}
+	var links int
+	if err := db.SQL.QueryRow(`SELECT COUNT(*) FROM skill_link`).Scan(&links); err != nil || links != 8 {
+		t.Fatalf("links=%d err=%v", links, err)
 	}
 }

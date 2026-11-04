@@ -12,7 +12,6 @@ import (
 	"strconv"
 
 	"rf4server/internal/proto"
-	"rf4server/internal/store"
 )
 
 // fishingSkillBonus 保存钓鱼判定使用的三类技能增益。
@@ -171,8 +170,7 @@ func hSkillLearn(ctx *Ctx) ([]byte, bool) {
 	return srv.replySkillTree(ctx)
 }
 
-// hSkillReset 处理 5/3 单节点重置并返还技能点。
-// 有两个以上整数时取第二个作为节点 ID，否则取第一个。
+// hSkillReset 处理 5/3 重置。单个整数是类目 ID，两个整数是类目 ID 与节点 ID。
 func hSkillReset(ctx *Ctx) ([]byte, bool) {
 	srv := ctx.Sess.Srv
 	if !srv.requireDB(ctx) {
@@ -180,15 +178,16 @@ func hSkillReset(ctx *Ctx) ([]byte, bool) {
 	}
 	ints := argsIntsDeep(ctx.Tree)
 	if len(ints) > 0 {
-		nodeID := int64(ints[0])
+		catID := int64(ints[0])
+		var nodeID *int64
 		if len(ints) >= 2 {
-			nodeID = int64(ints[1])
+			node := int64(ints[1])
+			nodeID = &node
 		}
-		// skills.reset_node：重置一个技能节点（返还技能点）
-		if err := srv.resetSkillNodes(ctx.Sess.pushCtx(), ctx.Sess.Userid, &nodeID); err != nil {
-			ctx.Log.Warn("5/3 重置写库失败", "node", nodeID, "err", err)
+		if err := srv.resetSkillNodes(ctx.Sess.pushCtx(), ctx.Sess.Userid, catID, nodeID); err != nil {
+			ctx.Log.Warn("5/3 重置写库失败", "cat", catID, "node", nodeID, "err", err)
 		} else {
-			ctx.Log.Info("5/3 重置节点", "node", nodeID)
+			ctx.Log.Info("5/3 重置完成", "cat", catID, "node", nodeID)
 		}
 	}
 	return srv.replySkillTree(ctx)
@@ -200,7 +199,7 @@ func hSkillResetAll(ctx *Ctx) ([]byte, bool) {
 	if !srv.requireDB(ctx) {
 		return nil, false
 	}
-	if err := srv.resetSkillNodes(ctx.Sess.pushCtx(), ctx.Sess.Userid, nil); err != nil {
+	if err := srv.resetSkillNodes(ctx.Sess.pushCtx(), ctx.Sess.Userid, 0, nil); err != nil {
 		ctx.Log.Warn("5/4 全部重置写库失败", "err", err)
 	} else {
 		ctx.Log.Info("5/4 已重置全部技能")
@@ -246,10 +245,7 @@ func (s *Server) skillAvailablePoints(ctx context.Context, uid int64) int64 {
 		return 0
 	}
 	total := skillPointsTotal(p.Level) + s.skillBonusPoints(ctx, uid)
-	spent, err := s.DB.SkillNodeLevelSum(ctx, uid)
-	if err != nil {
-		return 0
-	}
+	spent := s.skillSpentPoints(ctx, uid)
 	avail := total - spent
 	if avail < 0 {
 		return 0
@@ -257,16 +253,21 @@ func (s *Server) skillAvailablePoints(ctx context.Context, uid int64) int64 {
 	return avail
 }
 
+// skillSpentPoints 返回按逻辑技能去重后的已投入点数。
+func (s *Server) skillSpentPoints(ctx context.Context, uid int64) int64 {
+	if s == nil || s.DB == nil {
+		return 0
+	}
+	spent, err := s.DB.SkillNodeLevelSum(ctx, uid)
+	if err != nil {
+		s.log.Warn("读取技能点失败", "uid", uid, "err", err)
+		return 0
+	}
+	return spent
+}
+
 // skillLearn 学习或升级一个技能节点，返回是否成功及原因。
-// 校验顺序（与客户端预期一致）：
-//  1. 节点存在（skill_def）
-//  2. 已确认共享组共用等级，其余组沿用现有约束
-//  3. 可学（max_level > 0）
-//  4. 未达最大等级
-//  5. 大类熟练度 ≥ 节点解锁门槛
-//  6. 有可用技能点
-//
-// 通过则 skill_node.level += 1。
+// 同组与跨类目映射共享等级，只消耗一点技能点。
 func (s *Server) skillLearn(ctx context.Context, uid, catID, nodeID int64) (bool, string) {
 	def, err := s.DB.GetSkillDef(ctx, catID, nodeID)
 	if err != nil || def == nil {
@@ -275,8 +276,11 @@ func (s *Server) skillLearn(ctx context.Context, uid, catID, nodeID int64) (bool
 	if def.MaxLevel <= 0 {
 		return false, "not-learnable"
 	}
-	defs := s.skillDefsOfCat(catID)
-	shared := store.SharedSkillNodeIDs(catID, nodeID)
+	ident, err := s.DB.LoadSkillIdentity(ctx)
+	if err != nil {
+		return false, "db-error"
+	}
+	group := ident.Group(nodeID)
 	reason := "ok"
 	denied := errors.New("skill-denied")
 	effects, err := s.effectiveFishingSkills(ctx, uid)
@@ -302,19 +306,8 @@ func (s *Server) skillLearn(ctx context.Context, uid, catID, nodeID int64) (bool
 			return err
 		}
 		rows.Close()
-		if def.GroupID != 0 && len(shared) == 1 {
-			for _, other := range defs {
-				if other.NodeID == nodeID || other.GroupID != def.GroupID {
-					continue
-				}
-				if levels[other.NodeID] > 0 {
-					reason = "group-conflict"
-					return denied
-				}
-			}
-		}
 		var cur int64
-		for _, id := range shared {
+		for _, id := range group {
 			cur = max(cur, levels[id])
 		}
 		if cur >= def.MaxLevel {
@@ -337,11 +330,11 @@ func (s *Server) skillLearn(ctx context.Context, uid, catID, nodeID int64) (bool
 			return err
 		}
 		bonus, _ := strconv.ParseInt(bonusRaw, 10, 64)
-		if skillPointsTotal(level)+bonus-store.CountSkillNodePoints(levels) <= 0 {
+		if skillPointsTotal(level)+bonus-ident.SpentPoints(levels) <= 0 {
 			reason = "no-points"
 			return denied
 		}
-		for _, id := range shared {
+		for _, id := range group {
 			if _, err := conn.ExecContext(ctx, `INSERT INTO skill_node(uid,node_id,level) VALUES(?,?,?)
 				ON CONFLICT(uid,node_id) DO UPDATE SET level=excluded.level`, uid, id, cur+1); err != nil {
 				return err
@@ -353,7 +346,6 @@ func (s *Server) skillLearn(ctx context.Context, uid, catID, nodeID int64) (bool
 		return false, reason
 	}
 	if err != nil {
-
 		s.log.Warn("5/2 节点写库失败", "uid", uid, "node", nodeID, "err", err)
 		return false, "db-error"
 	}
@@ -381,18 +373,40 @@ func (s *Server) writeSkillNodes(ctx context.Context, uid int64, mutate func(*sq
 	return err
 }
 
-func (s *Server) resetSkillNodes(ctx context.Context, uid int64, nodeID *int64) error {
-	return s.writeSkillNodes(ctx, uid, func(conn *sql.Conn) error {
-		if nodeID == nil {
+// resetSkillNodes 删除指定身份；catID=0 且 nodeID=nil 时删除全部技能。
+func (s *Server) resetSkillNodes(ctx context.Context, uid, catID int64, nodeID *int64) error {
+	if nodeID == nil && catID == 0 {
+		return s.writeSkillNodes(ctx, uid, func(conn *sql.Conn) error {
 			_, err := conn.ExecContext(ctx, `DELETE FROM skill_node WHERE uid=?`, uid)
 			return err
-		}
-		var catID int64
-		err := conn.QueryRowContext(ctx, `SELECT cat_id FROM skill_def WHERE node_id=? LIMIT 1`, *nodeID).Scan(&catID)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		})
+	}
+	ident, err := s.DB.LoadSkillIdentity(ctx)
+	if err != nil {
+		return err
+	}
+	var nodes []int64
+	if nodeID != nil {
+		def, err := s.DB.GetSkillDef(ctx, catID, *nodeID)
+		if err != nil {
 			return err
 		}
-		for _, id := range store.SharedSkillNodeIDs(catID, *nodeID) {
+		if def == nil {
+			return nil
+		}
+		nodes = ident.Group(*nodeID)
+	} else {
+		for _, def := range s.skillDefsOfCat(catID) {
+			nodes = append(nodes, ident.Group(def.NodeID)...)
+		}
+	}
+	return s.writeSkillNodes(ctx, uid, func(conn *sql.Conn) error {
+		seen := map[int64]bool{}
+		for _, id := range nodes {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
 			if _, err := conn.ExecContext(ctx, `DELETE FROM skill_node WHERE uid=? AND node_id=?`, uid, id); err != nil {
 				return err
 			}
