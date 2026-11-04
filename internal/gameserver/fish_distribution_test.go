@@ -2,6 +2,7 @@ package gameserver
 
 import (
 	"context"
+	"math/rand"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -151,5 +152,34 @@ func TestFishDistributionAllStaticMapsAndRestart(t *testing.T) {
 		if err := db.Close(); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestFishDistributionUsesCanonicalLocation(t *testing.T) {
+	t.Setenv("GODEBUG", "randseednop=0")
+	path := filepath.Join(t.TempDir(), "distribution-loc.db")
+	db, err := store.OpenWithStatic(path, filepath.Join("..", "..", "server_data", "static.sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.TunableSet(context.Background(), "fish_distribution_enabled", "1", "test"); err != nil {
+		t.Fatal(err)
+	}
+	s := NewServer(config.Game{Tunnel: config.Tunnel{PSK: "distribution-location"}}, logging.Discard(), nil)
+	s.SetDB(db)
+	now := time.Unix(worldDayEpochUnix+12*realSecPerGameHour, 0)
+	c := fishRollContext{x: 100, z: 200, hasPos: true, now: now}
+	roll := func(loc string) *RolledFish {
+		rand.Seed(20261104)
+		return s.rollFishWithRules(loc, "worm_01", 0, neutralFishingSkillBonus(), c)
+	}
+	a := roll("loc1_02")
+	b := roll("level_001_lake")
+	if a == nil || b == nil || a.Species != b.Species || a.WeightG != b.WeightG {
+		t.Fatalf("canonical location changed distribution: a=%+v b=%+v", a, b)
 	}
 }

@@ -47,6 +47,9 @@ type FishState struct {
 	PosX         float64 // 3/9 位置同步：世界坐标 X
 	PosZ         float64 // 3/9 位置同步：世界坐标 Z
 	HasPos       bool
+	CastPosX     float64 // 14/2 实际抛竿落点 X
+	CastPosZ     float64 // 14/2 实际抛竿落点 Z
+	HasCastPos   bool
 	LastSkill    int64       // 本次钓鱼大类（1 浮钓 / 2 纺车 / 3 底钓 / 11 海钓）
 	Armed        *RolledFish // GM 武装"下一杆必上"（唯一绕过重量上限的路径）
 	Bonus        fishingSkillBonus
@@ -470,7 +473,7 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 		}
 	}
 	if distribution {
-		applyFishDistribution(loc, keys, wts, c)
+		applyFishDistribution(statLoc, keys, wts, c)
 		if !slices.ContainsFunc(wts, func(w float64) bool { return w > 0 }) {
 			return nil
 		}
@@ -1175,7 +1178,11 @@ func (s *Server) onBiteTimer(uid int64, gen uint64) {
 		st.mu.Unlock()
 		return
 	}
-	f := s.rollFishForRig(s.dbCtx(), uid, st.GearGuid, st.Loc, st.Bait, st.Bonus, fishRollContext{x: st.PosX, z: st.PosZ, hasPos: st.HasPos, spot: st.Spot, now: now})
+	x, z, hasPos := st.CastPosX, st.CastPosZ, st.HasCastPos
+	if !hasPos {
+		x, z, hasPos = st.PosX, st.PosZ, st.HasPos
+	}
+	f := s.rollFishForRig(s.dbCtx(), uid, st.GearGuid, st.Loc, st.Bait, st.Bonus, fishRollContext{x: x, z: z, hasPos: hasPos, spot: st.Spot, now: now})
 	if f == nil {
 		st.PushSent = false
 		st.Pending = nil
