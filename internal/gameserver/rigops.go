@@ -691,6 +691,9 @@ func (s *Server) returnToBackpack(ctx context.Context, row *store.Item) {
 		(fields[p].Op == "OPTGUID" || fields[p].Op == "GUID16") {
 		fields[p].Hex = ""
 	}
+	if source := fieldIdxByCS(row.WireClass, csSplitSource); source >= 0 && source < len(fields) {
+		fields[source].Hex = ""
+	}
 	if sidx := fieldIdxByCS(row.WireClass, csSlotEnum); sidx >= 0 && fieldOpAt(row.WireClass, sidx) == "BYTE" {
 		fields[sidx].Num = ptrU64(0) // 背包
 	}
@@ -700,6 +703,15 @@ func (s *Server) returnToBackpack(ctx context.Context, row *store.Item) {
 		return
 	}
 	_ = s.DB.UpdateItemFields(ctx, row.GUID, fj, row.Qty, row.Durability, row.Workmanship, "")
+}
+
+// refundableSplitChild 只向仍在背包的同类来源堆退回数量。
+func (s *Server) refundableSplitChild(ctx context.Context, row *store.Item) bool {
+	if !s.isSplitChild(ctx, row) {
+		return false
+	}
+	source, err := s.DB.GetItemByGUID(ctx, splitSourceGUID(row))
+	return err == nil && source != nil && source.UID == row.UID && source.NumericID == row.NumericID && source.Container == "backpack" && source.RigGUID == "" && source.Qty > 0
 }
 
 // splitSourceGUID 返回拆分子实例的来源堆 GUID。
@@ -997,7 +1009,7 @@ func (s *Server) rigSetComponent(ctx context.Context, uid int64, parentGUID stri
 	ordinal, oldGUID := s.rigSetTarget(ctx, parentGUID, slot, itemGUID, extra)
 	if oldGUID != "" && oldGUID != itemGUID {
 		if prev, oerr := s.DB.GetItemByGUID(ctx, oldGUID); oerr == nil && prev != nil {
-			if s.isSplitChild(ctx, prev) {
+			if s.refundableSplitChild(ctx, prev) {
 				// 原有挂载是拆分子实例：整条删除，并把 1 个单位退回来源堆。
 				srcGUID := splitSourceGUID(prev)
 				_ = s.DB.DeleteItems(ctx, []string{oldGUID})
@@ -1035,6 +1047,9 @@ func (s *Server) rigSetComponent(ctx context.Context, uid int64, parentGUID stri
 	// 顺序反过来会导致拆卸只删索引，实例中仍保留组件。
 	s.rigComponentWriteAt(ctx, parentGUID, slot, ordinal, itemGUID, extra)
 	_ = s.DB.SetItemRigLink(ctx, itemGUID, parentGUID, slot)
+	if slot == 27 {
+		_, _ = s.DB.SQL.ExecContext(ctx, `DELETE FROM rod_setting WHERE guid=? AND key=?`, parentGUID, fmt.Sprintf("rebait:%d", ordinal))
+	}
 
 	// 手持工具将装填物 GUID 写入父实例 f1。
 	if opts.ParentType == familyHanditem && itemGUID != "" {
@@ -1464,9 +1479,12 @@ func (s *Server) rigDetach(ctx context.Context, parentGUID string, slot int64, c
 // rigDetachAt 精确摘除指定品类和序号对应的实例。
 func (s *Server) rigDetachAt(ctx context.Context, parentGUID string, slot, ordinal int64, compGUID string) *rigDetachResult {
 	res := &rigDetachResult{CompGUID: compGUID}
+	if slot == 27 {
+		_, _ = s.DB.SQL.ExecContext(ctx, `DELETE FROM rod_setting WHERE guid=? AND key=?`, parentGUID, fmt.Sprintf("rebait:%d", ordinal))
+	}
 	if compGUID != "" {
 		if prev, oerr := s.DB.GetItemByGUID(ctx, compGUID); oerr == nil && prev != nil {
-			if s.isSplitChild(ctx, prev) {
+			if s.refundableSplitChild(ctx, prev) {
 				// 拆分子实例整条删除，并把一个单位退回来源堆。
 				srcGUID := splitSourceGUID(prev)
 				_ = s.DB.DeleteItems(ctx, []string{compGUID})
@@ -1502,6 +1520,7 @@ func (s *Server) rigDetachAt(ctx context.Context, parentGUID string, slot, ordin
 
 // rigRemoveAll 拆下父对象上的全部组件。
 func (s *Server) rigRemoveAll(ctx context.Context, uid int64, parentGUID string) []*rigDetachResult {
+	_, _ = s.DB.SQL.ExecContext(ctx, `DELETE FROM rod_setting WHERE guid=? AND key IN ('rebait:0','rebait:1')`, parentGUID)
 	rows, _ := s.DB.ListRigComponents(ctx, parentGUID)
 	comps := s.storedRigComponents(ctx, parentGUID)
 	seen := map[string]bool{}
