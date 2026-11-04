@@ -58,6 +58,7 @@ type FishState struct {
 
 // RolledFish 待结算/已结算的鱼。
 type RolledFish struct {
+	HookGUID   string
 	BaitGUIDs  string
 	BaitsKnown bool
 
@@ -392,7 +393,6 @@ func (s *Server) rollFish(loc string, bait string) *RolledFish {
 // rollFishForRig 是判鱼入口：先计算当前钓组的最弱环体重上限，
 // 再对静态鱼库和内置鱼池应用该上限及奖杯幸运。
 func (s *Server) rollFishForRig(ctx context.Context, uid int64, gearGUID, loc, bait string, bonus fishingSkillBonus, contexts ...fishRollContext) *RolledFish {
-	capKg, ids, weakest := s.gearWeightCapForRig(ctx, uid, gearGUID)
 	c := rollContext(contexts)
 	c.forRig = s.tunableF("fish_bait_rules_enabled", 0) == 1 || s.tunableF("fish_weather_enabled", 0) == 1
 	c.rigType = s.rigTypeForWrite(ctx, gearGUID)
@@ -402,11 +402,37 @@ func (s *Server) rollFishForRig(ctx context.Context, uid int64, gearGUID, loc, b
 		}
 		c.baits = s.currentBaits(ctx, gearGUID)
 	}
-	if capKg > 0 {
-		s.log.Info("钓鱼物理上限", "rod", ids.Rod, "reel", ids.Reel,
-			"line", ids.Line, "leader", ids.Leader, "weakest", weakest, "cap_kg", capKg)
+	capKg, ids, weakest := s.gearWeightCapForRig(ctx, uid, gearGUID)
+	groups := s.baitedHookSets(ctx, gearGUID)
+	if len(groups) == 0 {
+		rigType := int64(0)
+		if s.DB != nil && gearGUID != "" {
+			rigType = s.rigTypeForWrite(ctx, gearGUID)
+		}
+		if len(c.baits) > 0 && max(len(slotIndicesFor(rigType, catHook)), len(slotIndicesFor(rigType, catLure))) > 1 {
+			return nil
+		}
+		if capKg > 0 {
+			s.log.Info("钓鱼物理上限", "rod", ids.Rod, "reel", ids.Reel, "line", ids.Line, "leader", ids.Leader, "weakest", weakest, "cap_kg", capKg)
+		}
+		return s.rollFishWithRules(loc, bait, capKg, bonus, c)
 	}
-	return s.rollFishWithRules(loc, bait, capKg, bonus, c)
+	spec := s.loadGearSpecForRig(ctx, ids, gearGUID)
+	rand.Shuffle(len(groups), func(i, j int) { groups[i], groups[j] = groups[j], groups[i] })
+	for _, group := range groups {
+		selected := spec
+		if !s.applyBaitedHookSpec(ctx, group, &selected) {
+			continue
+		}
+		c.baits = group.baits
+		f := s.rollFishWithRules(loc, group.baits[0], gearWeightCapKg(selected), bonus, c)
+		if f != nil {
+			f.HookGUID = group.hookGUID
+			f.BaitGUIDs, f.BaitsKnown = strings.Join(group.baitGUIDs, " "), true
+			return f
+		}
+	}
+	return nil
 }
 
 func (s *Server) rollFishWithRules(loc, bait string, gearCapKg float64, bonus fishingSkillBonus, contexts ...fishRollContext) *RolledFish {
@@ -1378,7 +1404,9 @@ func (s *Server) onBiteTimer(uid int64, gen uint64) {
 		st.mu.Unlock()
 		return
 	}
-	f.BaitGUIDs, f.BaitsKnown = s.biteBaitSnapshot(s.dbCtx(), st.GearGuid)
+	if !f.BaitsKnown {
+		f.BaitGUIDs, f.BaitsKnown = s.biteBaitSnapshot(s.dbCtx(), st.GearGuid)
+	}
 	f.LocLevel = s.currentLevel(uid)
 	st.Pending = f
 	gear := st.GearGuid

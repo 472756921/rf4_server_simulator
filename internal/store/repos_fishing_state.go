@@ -11,6 +11,7 @@ import (
 // FishingFish 是 RolledFish 的可持久化快照。恢复 pending 时必须复用原 GUID、
 // 重量与曲线输入，禁止重启后重新 roll。
 type FishingFish struct {
+	HookGUID   string  `json:"hook_guid,omitempty"`
 	BaitGUIDs  string  `json:"bait_guids,omitempty"`
 	BaitsKnown bool    `json:"baits_known,omitempty"`
 	FishGUID   string  `json:"fish_guid"`
