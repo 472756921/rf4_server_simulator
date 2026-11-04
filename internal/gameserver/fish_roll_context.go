@@ -18,6 +18,7 @@ type fishRollContext struct {
 	rigType   int64
 	happyBite float64
 	biteRoll  func() float64
+	cache     *fishingRollCache
 }
 
 func rollContext(contexts []fishRollContext) fishRollContext {

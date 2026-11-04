@@ -305,6 +305,7 @@ func TestLureBiteGating(t *testing.T) {
 	if d := srv.biteDelay(st); d < 0.8 || d > 6.0 {
 		t.Fatalf("路亚咬钩延迟应在 [0.8, 6.0]s，实得 %.2f", d)
 	}
+	enableFastBites(t, db, srv)
 
 	// 执行 14/1 到 14/2 的抛竿流程。
 	fc.SendRequest(400, 14, 1, bodyWithGUIDs(rodGUID)...)
@@ -313,14 +314,15 @@ func TestLureBiteGating(t *testing.T) {
 	if resp := fc.WaitResponse(3 * time.Second); len(resp.Body) == 0 || resp.Body[0] != 0x01 {
 		t.Fatalf("14/2 应回 800: %x", resp.Body)
 	}
+	backdateCastForFastBite(t, srv, uid)
 
 	waterBody, err := proto.EncodeValue(proto.Args524(wiregen.MustMakeObj("lobemkloehp", map[int]*proto.Value{5: proto.U32(0x600)})), wiregen.Table())
 	if err != nil {
 		t.Fatal(err)
 	}
 	fc.SendRequest(402, 14, 7, waterBody...)
-	// 路亚应在 6 秒窗口内咬钩，额外等待落水时间。
-	fish14 := waitPushCmd(t, fc, 14, 14, 15*time.Second)
+	// 测试使用固定短延迟并跳过落水保护。
+	fish14 := waitPushCmd(t, fc, 14, 14, 3*time.Second)
 	if fish14 == nil {
 		t.Fatal("路亚挂饵后 15s 内未咬钩（14/14 未达）")
 	}

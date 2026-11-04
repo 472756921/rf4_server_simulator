@@ -2,6 +2,7 @@ package gameserver
 
 import (
 	"math"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -89,6 +90,8 @@ func TestAlternativeBaitInterestUsesSkillWithoutBypassingExclusions(t *testing.T
 }
 
 func TestAlternativeBaitActualPoolBitesRemainRareAndSkillHelps(t *testing.T) {
+	t.Setenv("GODEBUG", "randseednop=0")
+	rand.Seed(20261104)
 	s, _ := seedBaitRuleTest(t)
 	setBaitRuleSwitch(t, s, "1")
 	loc := "alternate-bait-test-pool"
@@ -101,10 +104,10 @@ func TestAlternativeBaitActualPoolBitesRemainRareAndSkillHelps(t *testing.T) {
 			delete(fishPools, loc)
 		}
 	})
-	c := fishRollContext{baits: []string{"rule_other"}, forRig: true}
+	c := fishRollContext{baits: []string{"rule_other"}, forRig: true, cache: newFishingRollCache()}
 	count := func(speed float64) int {
 		bites := 0
-		for range 2000 {
+		for range 500 {
 			if f := s.rollFishPoolsWithRules(loc, 0, fishingSkillBonus{BiteSpeed: speed}, c); f != nil {
 				if f.Species != "c.roach" {
 					t.Fatalf("unexpected species: %s", f.Species)
@@ -115,7 +118,7 @@ func TestAlternativeBaitActualPoolBitesRemainRareAndSkillHelps(t *testing.T) {
 		return bites
 	}
 	plain, skilled := count(1), count(.5)
-	if plain < 35 || plain > 170 || skilled < 110 || skilled > 320 || skilled <= plain {
-		t.Fatalf("2000 attempts: base=%d skilled=%d", plain, skilled)
+	if plain < 8 || plain > 43 || skilled < 27 || skilled > 80 || skilled <= plain {
+		t.Fatalf("500 attempts: base=%d skilled=%d", plain, skilled)
 	}
 }

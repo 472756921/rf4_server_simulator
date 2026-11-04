@@ -3,7 +3,6 @@ package gameserver
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"testing"
 
 	"rf4server/internal/config"
@@ -14,18 +13,9 @@ import (
 
 func newEconomyTxTestServer(t *testing.T) (*Server, *store.DB) {
 	t.Helper()
-	db, err := store.Open(filepath.Join(t.TempDir(), "economy.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Migrate(); err != nil {
-		_ = db.Close()
-		t.Fatal(err)
-	}
-	importStaticForProbe(t, db)
+	db := openItemTestDB(t)
 	srv := NewServer(config.Game{Tunnel: config.Tunnel{PSK: "econ"}}, logging.Discard(), nil)
 	srv.SetDB(db)
-	t.Cleanup(func() { _ = db.Close() })
 	return srv, db
 }
 

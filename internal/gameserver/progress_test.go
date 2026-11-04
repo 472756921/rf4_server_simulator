@@ -2,7 +2,6 @@ package gameserver
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"rf4server/internal/config"
@@ -16,14 +15,7 @@ import (
 
 func newProgressSrv(t *testing.T) (*Server, *store.DB) {
 	t.Helper()
-	db, err := store.Open(filepath.Join(t.TempDir(), "progress.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	if err := db.Migrate(); err != nil {
-		t.Fatal(err)
-	}
+	db := openMigratedTestDB(t)
 	srv := NewServer(config.Game{Tunnel: config.Tunnel{PSK: "probe"}}, logging.Discard(), nil)
 	srv.SetDB(db)
 	return srv, db

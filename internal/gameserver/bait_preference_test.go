@@ -12,9 +12,10 @@ func TestFishBaitPreferenceAlternateCombinationAndChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Unix(worldDayEpochUnix+1500, 0)
+	cache := newFishingRollCache()
 	weight := func(baits []string, at time.Time) float64 {
 		t.Helper()
-		keys, w := s.filterFishBaitSet("rules-test", baits, []string{"c.roach"}, []float64{1}, at)
+		keys, w := s.filterFishBaitSet("rules-test", baits, []string{"c.roach"}, []float64{1}, at, fishRollContext{cache: cache})
 		if len(keys) == 0 {
 			return 0
 		}
@@ -44,10 +45,10 @@ func TestFishBaitPreferenceAlternateCombinationAndChange(t *testing.T) {
 	}
 	preferredHits, otherHits := 0, 0
 	for i := 0; i < 160; i++ {
-		if s.rollFishForRig(context.Background(), 0, "", "level_900_rules", "rule_worm", neutralFishingSkillBonus()) != nil {
+		if s.rollFishForRig(context.Background(), 0, "", "level_900_rules", "rule_worm", neutralFishingSkillBonus(), fishRollContext{cache: cache}) != nil {
 			preferredHits++
 		}
-		if s.rollFishForRig(context.Background(), 0, "", "level_900_rules", "rule_other", neutralFishingSkillBonus()) != nil {
+		if s.rollFishForRig(context.Background(), 0, "", "level_900_rules", "rule_other", neutralFishingSkillBonus(), fishRollContext{cache: cache}) != nil {
 			otherHits++
 		}
 	}

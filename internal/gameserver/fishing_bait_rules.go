@@ -1,6 +1,7 @@
 package gameserver
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -154,47 +155,35 @@ func (s *Server) filterFishBaits(loc, bait string, keys []string, weights []floa
 	return s.filterFishBaitSet(loc, []string{bait}, keys, weights, time.Now())
 }
 
-func (s *Server) filterFishBaitSet(loc string, ids []string, keys []string, weights []float64, now time.Time, contexts ...fishRollContext) ([]string, []float64) {
-	if s.DB == nil {
-		return nil, nil
-	}
-	ctx := s.dbCtx()
-	var baits []ruleBait
-	seen := map[string]bool{}
-	for _, id := range ids {
-		if id == "" || seen[id] {
-			continue
-		}
-		seen[id] = true
-		b := ruleBait{id: id}
-		var raw string
-		if err := s.DB.SQL.QueryRowContext(ctx, `SELECT COALESCE(c.name_zh,c.name,''),d.category,COALESCE(d.attrs_json,'{}')
+func (s *Server) loadRuleBait(ctx context.Context, id string) (ruleBait, bool) {
+	b := ruleBait{id: id}
+	var raw string
+	if err := s.DB.SQL.QueryRowContext(ctx, `SELECT COALESCE(c.name_zh,c.name,''),d.category,COALESCE(d.attrs_json,'{}')
    FROM item_def d LEFT JOIN item_catalog c ON c.item_id=d.item_id WHERE d.item_id=?`, id).Scan(&b.name, &b.category, &raw); err != nil {
-			return nil, nil
-		}
-		if b.category != 17 && b.category != 27 {
-			return nil, nil
-		}
-		var attrs struct {
-			LureType int64 `json:"mbemakijdeh"`
-			BaitType int64 `json:"fopbhlmkcpe"`
-		}
-		if json.Unmarshal([]byte(raw), &attrs) != nil {
-			return nil, nil
-		}
-		b.lureType, b.baitType = attrs.LureType, attrs.BaitType
-		baits = append(baits, b)
+		return ruleBait{}, false
 	}
-	if len(baits) == 0 {
-		return nil, nil
+	if b.category != 17 && b.category != 27 {
+		return ruleBait{}, false
 	}
+	var attrs struct {
+		LureType int64 `json:"mbemakijdeh"`
+		BaitType int64 `json:"fopbhlmkcpe"`
+	}
+	if json.Unmarshal([]byte(raw), &attrs) != nil {
+		return ruleBait{}, false
+	}
+	b.lureType, b.baitType = attrs.LureType, attrs.BaitType
+	return b, true
+}
+
+func (s *Server) loadFishNames(ctx context.Context) (map[string]string, bool) {
 	names := map[string]string{}
-	// 后台可向水域添加鱼种，名称也须从其他水域解析，避免遗漏该鱼的禁饵。
 	rows, err := s.DB.SQL.QueryContext(ctx, `SELECT fish_key,fish_zh FROM loc_wiki_fish
 		UNION SELECT fish_key,name_zh FROM loc_fish`)
 	if err != nil {
-		return nil, nil
+		return names, false
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var key, name string
 		if rows.Scan(&key, &name) == nil {
@@ -203,34 +192,59 @@ func (s *Server) filterFishBaitSet(loc string, ids []string, keys []string, weig
 			}
 		}
 	}
-	err = rows.Err()
-	rows.Close()
+	return names, true
+}
+
+func (s *Server) loadLocalBaitEvidence(ctx context.Context, loc, baitID, baitName string) map[string]bool {
+	evidence := map[string]bool{}
+	rows, err := s.DB.SQL.QueryContext(ctx, `SELECT fish_key FROM loc_bait_fish WHERE loc=? AND bait IN (?,?) AND catches>0`, loc, baitID, baitName)
 	if err != nil {
+		return evidence
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var key string
+		if rows.Scan(&key) == nil {
+			evidence[key] = true
+		}
+	}
+	return evidence
+}
+
+func (s *Server) filterFishBaitSet(loc string, ids []string, keys []string, weights []float64, now time.Time, contexts ...fishRollContext) ([]string, []float64) {
+	if s.DB == nil {
+		return nil, nil
+	}
+	c := rollContext(contexts)
+	ctx := s.dbCtx()
+	var baits []ruleBait
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		b, ok := s.cachedBaitDefinition(ctx, c, id)
+		if !ok {
+			return nil, nil
+		}
+		baits = append(baits, b)
+	}
+	if len(baits) == 0 {
+		return nil, nil
+	}
+	names, namesOK := s.cachedFishNames(ctx, c)
+	if !namesOK {
 		return nil, nil
 	}
 	evidence := make([]map[string]int64, len(baits))
 	localEvidence := make([]map[string]bool, len(baits))
 	for i, b := range baits {
-		evidence[i] = s.DB.BaitTiers(ctx, b.id)
-		localEvidence[i] = map[string]bool{}
-		rows, err = s.DB.SQL.QueryContext(ctx, `SELECT fish_key FROM loc_bait_fish WHERE loc=? AND bait IN (?,?) AND catches>0`, loc, b.id, b.name)
-		if err != nil {
-			continue
-		}
-		for rows.Next() {
-			var key string
-			if rows.Scan(&key) == nil {
-				localEvidence[i][key] = true
-			}
-		}
-		if rows.Err() != nil {
-			localEvidence[i] = map[string]bool{}
-		}
-		rows.Close()
+		evidence[i] = s.cachedBaitTiers(ctx, c, b.id)
+		localEvidence[i] = s.cachedLocalBaitEvidence(ctx, c, loc, b.id, b.name)
 	}
 	outKeys := make([]string, 0, len(keys))
 	outWeights := make([]float64, 0, len(keys))
-	c := rollContext(contexts)
 	period := (now.Unix() - worldDayEpochUnix) / (4 * realSecPerGameHour)
 	for i, key := range keys {
 		if weights[i] <= 0 {
