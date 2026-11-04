@@ -155,11 +155,12 @@ func (s *Server) itemBrokenForMount(ctx context.Context, row *store.Item) bool {
 func (s *Server) breakLineOrRod(ctx context.Context, uid int64, rodGUID, reportedGUID string) (*gearBreakOutcome, error) {
 	rodGUID = strings.TrimSpace(rodGUID)
 	reportedGUID = strings.TrimSpace(reportedGUID)
-	if rodGUID == "" || rodGUID == zeroGUID {
-		return nil, sql.ErrNoRows
+	report, err := s.validateBreakReport(ctx, uid, rodGUID, reportedGUID)
+	if err != nil {
+		return nil, err
 	}
-	if comp, ok := s.rigTerminalComponentOf(ctx, uid, rodGUID, reportedGUID); ok {
-		return s.breakComponentTx(ctx, uid, rodGUID, comp)
+	if report.terminalCategory != 0 {
+		return s.breakComponentTx(ctx, uid, rodGUID, reportedGUID, report.terminalCategory)
 	}
 	dec, err := s.resolveGearBreak(ctx, uid, rodGUID, reportedGUID)
 	if err != nil {
@@ -171,52 +172,107 @@ func (s *Server) breakLineOrRod(ctx context.Context, uid int64, rodGUID, reporte
 	case "reel":
 		return s.damageReelOverload(ctx, uid, rodGUID, dec.GUID)
 	default:
-		return s.breakRodTx(ctx, uid, rodGUID, dec.GUID)
+		brokenGUID := dec.GUID
+		if report.embedded {
+			brokenGUID = reportedGUID
+		}
+		return s.breakRodTx(ctx, uid, rodGUID, brokenGUID)
 	}
 }
 
-// rigTerminalComponentOf 判断客户端上报的断件是否为已装在竿上的终端消耗件。
-// 只采信属于本人且确实挂在该钓组上的组件；随机 GUID 和承力件都返回 false，
-// 交回 resolveGearBreak 物理裁决。
-func (s *Server) rigTerminalComponentOf(ctx context.Context, uid int64, rodGUID, reportedGUID string) (*store.Item, bool) {
+type validatedBreakReport struct {
+	terminalCategory int64
+	embedded         bool
+}
+
+// validateBreakReport 只接受本人的竿和该竿上的受支持部件。终端件走独立摘除。
+func (s *Server) validateBreakReport(ctx context.Context, uid int64, rodGUID, reportedGUID string) (validatedBreakReport, error) {
+	rod, err := s.DB.GetItemByGUID(ctx, rodGUID)
+	if err != nil || rod == nil || rod.UID != uid {
+		return validatedBreakReport{}, sql.ErrNoRows
+	}
+	rodDef, err := s.itemDefForRow(ctx, rod)
+	if err != nil || rodDef == nil || rodDef.Category != gearCatRod {
+		return validatedBreakReport{}, sql.ErrNoRows
+	}
 	if reportedGUID == "" || reportedGUID == zeroGUID || reportedGUID == rodGUID {
-		return nil, false
+		return validatedBreakReport{}, nil
 	}
-	row, err := s.DB.GetItemByGUID(ctx, reportedGUID)
-	if err != nil || row == nil || row.UID != uid {
-		return nil, false
+
+	part, err := s.DB.GetItemByGUID(ctx, reportedGUID)
+	if errors.Is(err, sql.ErrNoRows) {
+		// 出厂竿件只存在于母竿内，继续交由整组承力规则裁决。
+		tree, treeErr := s.ItemToTree(ctx, rod)
+		if treeErr != nil {
+			return validatedBreakReport{}, treeErr
+		}
+		for i := 0; i < 3; i++ {
+			if child := tree.Field(i).Val; child != nil &&
+				child.Field(fieldIdxByCS(child.Class, csGUID)).Hex == reportedGUID {
+				return validatedBreakReport{embedded: true}, nil
+			}
+		}
+		return validatedBreakReport{}, sql.ErrNoRows
 	}
-	def, err := s.itemDefForRow(ctx, row)
-	if err != nil || def == nil || !terminalBreakCategories[def.Category] {
-		return nil, false
+	if err != nil || part == nil || part.UID != uid {
+		return validatedBreakReport{}, sql.ErrNoRows
 	}
-	// 确认组件确实装在该竿上（rig_component 投影或 f5 钓组存储任一命中即可）。
-	mounted := false
-	var n int
-	if err := s.DB.SQL.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM rig_component WHERE rig_guid=? AND guid=?`, rodGUID, reportedGUID,
-	).Scan(&n); err == nil && n > 0 {
-		mounted = true
+	def, err := s.itemDefForRow(ctx, part)
+	if err != nil || def == nil {
+		return validatedBreakReport{}, sql.ErrNoRows
+	}
+	terminal := terminalBreakCategories[def.Category]
+	if !terminal && !sourceLineCategories[def.Category] && def.Category != gearCatReel {
+		return validatedBreakReport{}, errors.New("断件类型不支持")
+	}
+
+	fields, err := FieldsFromJSON(rod.FieldsJSON)
+	if err != nil {
+		return validatedBreakReport{}, err
+	}
+	mounted, err := breakReportMounted(ctx, s.DB.SQL, rod, fields, part, def.Category)
+	if err != nil {
+		return validatedBreakReport{}, err
 	}
 	if !mounted {
-		if rod, rerr := s.DB.GetItemByGUID(ctx, rodGUID); rerr == nil && rod != nil {
-			if fields, ferr := FieldsFromJSON(rod.FieldsJSON); ferr == nil {
-				stored := protoFieldAt(fields, rod.WireClass, csRigObject)
-				for _, comp := range rigCompsOf(stored) {
-					if comp.GUID == reportedGUID {
-						mounted = true
-						break
-					}
-				}
+		return validatedBreakReport{}, errors.New("断件不在该钓组中")
+	}
+	if terminal {
+		return validatedBreakReport{terminalCategory: def.Category}, nil
+	}
+	return validatedBreakReport{}, nil
+}
+
+type breakReportQueryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func breakReportMounted(ctx context.Context, db breakReportQueryer, rod *store.Item, fields []proto.Field, part *store.Item, category int64) (bool, error) {
+	if part.RigGUID != "" && part.RigGUID != rod.GUID {
+		return false, nil
+	}
+	if name, dedicated := categorySlotField[category]; dedicated {
+		if idx := fieldIdxByCS(rod.WireClass, name); idx >= 0 && idx < len(fields) && fields[idx].GuidHex() == part.GUID {
+			return true, nil
+		}
+	} else {
+		for _, comp := range rigCompsOf(protoFieldAt(fields, rod.WireClass, csRigObject)) {
+			if comp.GUID == part.GUID && comp.Category == category {
+				return true, nil
 			}
 		}
 	}
-	return row, mounted
+	// 兼容尚未同步到竿快照的钓组投影。
+	var mounted bool
+	err := db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM rig_component WHERE rig_guid=? AND slot=? AND guid=?)`, rod.GUID, category, part.GUID,
+	).Scan(&mounted)
+	return mounted, err
 }
 
 // breakComponentTx 处理终端件断裂：组件耐久归零、从钓组摘除并退回背包
 // （物品保留，可经工坊修理后重新装配），竿本体与承力线不受影响。
-func (s *Server) breakComponentTx(ctx context.Context, uid int64, rodGUID string, comp *store.Item) (*gearBreakOutcome, error) {
+func (s *Server) breakComponentTx(ctx context.Context, uid int64, rodGUID, compGUID string, category int64) (*gearBreakOutcome, error) {
 	tx, err := s.DB.SQL.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -227,9 +283,20 @@ func (s *Server) breakComponentTx(ctx context.Context, uid int64, rodGUID string
 	if err != nil || rod == nil || rod.UID != uid {
 		return nil, sql.ErrNoRows
 	}
-	comp, err = s.DB.GetItemByGUIDTx(ctx, tx, comp.GUID)
+	comp, err := s.DB.GetItemByGUIDTx(ctx, tx, compGUID)
 	if err != nil || comp == nil || comp.UID != uid {
 		return nil, sql.ErrNoRows
+	}
+	rodFields, err := FieldsFromJSON(rod.FieldsJSON)
+	if err != nil {
+		return nil, err
+	}
+	mounted, err := breakReportMounted(ctx, tx, rod, rodFields, comp, category)
+	if err != nil {
+		return nil, err
+	}
+	if !mounted {
+		return nil, errors.New("断件不在该钓组中")
 	}
 	compFields, err := FieldsFromJSON(comp.FieldsJSON)
 	if err != nil {
@@ -254,10 +321,6 @@ func (s *Server) breakComponentTx(ctx context.Context, uid int64, rodGUID string
 	}
 
 	// 从 f5 钓组存储中摘除该组件。
-	rodFields, err := FieldsFromJSON(rod.FieldsJSON)
-	if err != nil {
-		return nil, err
-	}
 	stored := protoFieldAt(rodFields, rod.WireClass, csRigObject)
 	comps := rigCompsOf(stored)
 	detached := false

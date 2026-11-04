@@ -577,3 +577,157 @@ func TestTerminalComponentProjectionOnlyBreakCleansProjection(t *testing.T) {
 		t.Fatalf("损坏组件快照仍保留父件: %s", got)
 	}
 }
+
+func TestInvalidBreakReportPreservesCatchAndEquipment(t *testing.T) {
+	srv, db := newRigTestServer(t)
+	ctx := context.Background()
+	sess := newProbeSess(srv)
+	uid := sess.Userid
+	create := func(owner int64, itemID string) string {
+		t.Helper()
+		row, err := srv.CreateItem(ctx, owner, itemID, "backpack", 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return row.GUID
+	}
+	rod := create(uid, "feeder_10125_FD360")
+	line := create(uid, "mono_40853")
+	mountGearForTest(t, srv, sess, rod, line)
+	bell := mountGearForTest(t, srv, sess, rod, create(uid, "feeder_bell")).MountedGUID
+	otherRod := create(uid, "feeder_10125_FD360")
+	foreignRod := create(uid+1, "feeder_10125_FD360")
+	unmounted := create(uid, "mono_40853")
+	foreignHook := create(uid+1, "clas_20163")
+	otherLine := create(uid, "mono_40853")
+	mountGearForTest(t, srv, sess, otherRod, otherLine)
+	wrongSlot := create(uid, "clas_20163")
+	if err := db.UpsertRigComponentAt(ctx, rod, catFloat, 0, wrongSlot, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	st := srv.stateFor(uid)
+	pending := &RolledFish{Species: "perch"}
+	st.mu.Lock()
+	st.GearGuid, st.Pending, st.CastActive, st.Hooked = rod, pending, true, true
+	st.mu.Unlock()
+	length := lineLengthOfTestItem(t, srv, line)
+	before := mustItem(t, db, rod).Durability
+
+	for _, tc := range []struct {
+		name, target, part string
+	}{
+		{"unknown", rod, "ffffffffffffffffffffffffffffffff"},
+		{"foreign component", rod, foreignHook},
+		{"foreign rod", foreignRod, foreignRod},
+		{"unmounted line", rod, unmounted},
+		{"another rig's line", rod, otherLine},
+		{"unsupported mounted item", rod, bell},
+		{"wrong projection slot", rod, wrongSlot},
+		{"nonrod target", line, line},
+		{"undecoded request", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := &Ctx{Sess: sess, Main: 17, Sub: 9, ExpectResponse: true, Log: logging.Discard()}
+			if tc.target != "" {
+				request.Tree = rigRequestTree(t, proto.Guid(tc.target), proto.Guid(tc.part), proto.U32(1), proto.Null())
+				request.DecodeOK = true
+			}
+			result := srv.dispatch.executeRequest(request, true)
+			if !result.hasResponse || !result.nativeFailure {
+				t.Fatalf("无效断件没有返回协议错误: %+v", result)
+			}
+			st.mu.Lock()
+			unchanged := st.Pending == pending && st.CastActive && st.Hooked && !st.Resolved && st.GearGuid == rod
+			st.mu.Unlock()
+			if !unchanged || mustItem(t, db, rod).Durability != before || lineLengthOfTestItem(t, srv, line) != length {
+				t.Fatal("无效断件改变了钓获或装备")
+			}
+			logs, err := db.ListItemDamageLogs(ctx, uid, 20)
+			if err != nil || len(logs) != 0 {
+				t.Fatalf("无效断件写入了损坏记录: %+v %v", logs, err)
+			}
+		})
+	}
+}
+
+func TestBreakReportAcceptsMountedLoadComponents(t *testing.T) {
+	srv, db := newRigTestServer(t)
+	ctx := context.Background()
+	sess := newProbeSess(srv)
+	uid := sess.Userid
+	create := func(id string) string {
+		t.Helper()
+		row, err := srv.CreateItem(ctx, uid, id, "backpack", 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return row.GUID
+	}
+	rod := create("feeder_10125_FD360")
+	for _, id := range []string{"mono_40853", "spin_5820", "fc_leader_40048"} {
+		item := mountGearForTest(t, srv, sess, rod, create(id)).MountedGUID
+		if report, err := srv.validateBreakReport(ctx, uid, rod, item); err != nil || report.terminalCategory != 0 || report.embedded {
+			t.Fatalf("已装配的承力件 %s 没有交由承力规则: %+v %v", id, report, err)
+		}
+	}
+
+	factoryRod := create("spin_10158_M88HH")
+	factoryGUID := func(guid string) string {
+		t.Helper()
+		tree, err := srv.ItemToTree(ctx, mustItem(t, db, guid))
+		if err != nil {
+			t.Fatal(err)
+		}
+		child := tree.Field(0).Val
+		if child == nil {
+			t.Fatal("缺少出厂竿件")
+		}
+		return child.Field(fieldIdxByCS(child.Class, csGUID)).Hex
+	}
+	if _, err := srv.breakLineOrRod(ctx, uid, factoryRod, factoryGUID(create("spin_10158_M88HH"))); err == nil {
+		t.Fatal("错误接收了另一把竿的出厂部件")
+	}
+	part := factoryGUID(factoryRod)
+	st := srv.stateFor(uid)
+	st.mu.Lock()
+	st.GearGuid = factoryRod
+	st.mu.Unlock()
+	request := &Ctx{Sess: sess, Main: 17, Sub: 9, DecodeOK: true, ExpectResponse: true, Log: logging.Discard(),
+		Tree: rigRequestTree(t, proto.Guid(zeroGUID), proto.Guid(part), proto.U32(1), proto.Null())}
+	result := srv.dispatch.executeRequest(request, true)
+	if !result.hasResponse || result.nativeFailure || result.failed {
+		t.Fatalf("该竿的出厂部件未走原有断竿响应: %+v", result)
+	}
+	decoded, _, err := proto.DecodeValue(result.body, 0, srv.Table())
+	if err != nil || decoded.TypeID != 11028 || decoded.Field(1).Hex != part {
+		t.Fatalf("断竿响应应指明经校验的出厂部件: %v %v", decoded, err)
+	}
+	if mustItem(t, db, factoryRod).Durability != 0 {
+		t.Fatal("已裁决断裂的母竿没有落库")
+	}
+	logs, err := db.ListItemDamageLogs(ctx, uid, 10)
+	if err != nil || len(logs) != 1 || logs[0].ItemGUID != factoryRod || logs[0].BrokenGUID != part {
+		t.Fatalf("出厂部件与母竿的损坏记录不一致: %+v %v", logs, err)
+	}
+}
+
+func TestTerminalComponentBreakRechecksAttachment(t *testing.T) {
+	srv, db := newRigTestServer(t)
+	ctx := context.Background()
+	sess := newProbeSess(srv)
+	rod, err := srv.CreateItem(ctx, sess.Userid, "tele_10012_tl16", "backpack", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook, err := srv.CreateItem(ctx, sess.Userid, "clas_20163", "backpack", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := srv.breakComponentTx(ctx, sess.Userid, rod.GUID, hook.GUID, catHook); err == nil {
+		t.Fatal("事务接受了已卸下的组件")
+	}
+	if mustItem(t, db, hook.GUID).Durability != hook.Durability {
+		t.Fatal("事务损坏了未装配的组件")
+	}
+}
