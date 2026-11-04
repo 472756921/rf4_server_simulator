@@ -69,7 +69,7 @@ var categoryWireClass = map[int64]wireClassEntry{
 	59: {"iknkgeomkip", 3200},  // Cobra 打窝器
 	60: {"ifnaghdaolg", 3201},  // Slingshot 弹弓
 	79: {"abmokghdbhf", 11500}, // 竿架（rod pod），客户端模型 pphmpibfgea
-	81: {"dbjjakbbbfc", 12601}, // 扩展类别映射
+	81: {"kbpmmclfipg", 1470},  // 渔轮电机（装在轮 f14 扩展槽，DTO odlknjlbooh）
 }
 
 const fallbackWireClass = "ohciikgjghe"
@@ -719,6 +719,21 @@ func (s *Server) applyDefAttrs(def *store.ItemDef, class string, obj *proto.Valu
 	var attrs map[string]any
 	if err := json.Unmarshal([]byte(def.AttrsJSON), &attrs); err != nil {
 		return
+	}
+	// 渔轮电机（kbpmmclfipg/1470）的功率与最高速度在定义里叫
+	// afmboidbbaj / fgkfkgimfgo，wire 类字段叫 npnlhobgfen / mbbdpnidheg，
+	// 名字对不上，直接按别名映射；这两个值是 f32 位模式，走下面的 float 分支。
+	if class == "kbpmmclfipg" {
+		if v, ok := attrs["afmboidbbaj"]; ok {
+			if _, exists := attrs["npnlhobgfen"]; !exists {
+				attrs["npnlhobgfen"] = v
+			}
+		}
+		if v, ok := attrs["fgkfkgimfgo"]; ok {
+			if _, exists := attrs["mbbdpnidheg"]; !exists {
+				attrs["mbbdpnidheg"] = v
+			}
+		}
 	}
 	for cs, val := range attrs {
 		idx := fieldIdxByCS(class, cs)

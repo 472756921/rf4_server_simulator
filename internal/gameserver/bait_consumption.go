@@ -105,6 +105,11 @@ func (s *Server) consumeBaitEvent(ctx context.Context, uid int64, rod, event str
 	if err := addTxnTx(ctx, tx, uid, kind, "", event, 0, 0, "饵料使用"); err != nil {
 		return out, err
 	}
+	fields, err := FieldsFromJSON(parent.FieldsJSON)
+	if err != nil {
+		return out, err
+	}
+	originalSlots := rigCompsOf(protoFieldAt(fields, parent.WireClass, csRigObject))
 	seen := map[string]bool{}
 	for _, guid := range ids {
 		if seen[guid] {
@@ -174,15 +179,9 @@ func (s *Server) consumeBaitEvent(ctx context.Context, uid int64, rod, event str
 			continue
 		}
 		if !cast && def.Category == 27 {
-			fields, err := FieldsFromJSON(parent.FieldsJSON)
-			if err != nil {
-				return out, err
-			}
-			if idx := fieldIdxByCS(parent.WireClass, csRigObject); idx >= 0 && idx < len(fields) {
-				if key, _, ok := rigCompKeyForGUID(rigCompsOf(fields[idx].Val), guid); ok {
-					if _, err := tx.ExecContext(ctx, `INSERT INTO rod_setting(guid,key,value,updated_ts) VALUES(?,?,?,?) ON CONFLICT(guid,key) DO UPDATE SET value=excluded.value,updated_ts=excluded.updated_ts`, rod, fmt.Sprintf("rebait:%d", rigCompOrdinal(key)), def.ItemID, float64(time.Now().Unix())); err != nil {
-						return out, err
-					}
+			if key, _, ok := rigCompKeyForGUID(originalSlots, guid); ok {
+				if _, err := tx.ExecContext(ctx, `INSERT INTO rod_setting(guid,key,value,updated_ts) VALUES(?,?,?,?) ON CONFLICT(guid,key) DO UPDATE SET value=excluded.value,updated_ts=excluded.updated_ts`, rod, fmt.Sprintf("rebait:%d", rigCompOrdinal(key)), def.ItemID, float64(time.Now().Unix())); err != nil {
+					return out, err
 				}
 			}
 		}
@@ -317,7 +316,7 @@ func (s *Server) reloadBaitForCast(ctx context.Context, uid int64, rod string) (
 	if parent.UID != uid {
 		return out, fmt.Errorf("不能为其他玩家的钓组补饵")
 	}
-	for ordinal := int64(0); ordinal < 2; ordinal++ {
+	for ordinal := int64(0); ordinal < int64(baitSlotCount(s.rigTypeForWrite(ctx, rod))); ordinal++ {
 		key := fmt.Sprintf("rebait:%d", ordinal)
 		id, err := s.DB.GetRodSetting(ctx, rod, key)
 		if err == sql.ErrNoRows {
