@@ -146,3 +146,55 @@ func TestLoginDomainsDedup(t *testing.T) {
 		t.Fatalf("去重失败: %v", got)
 	}
 }
+
+func TestHostsRestorePreservesPreexistingActiveLine(t *testing.T) {
+	path := writeHosts(t, "127.0.0.1 api.rf4game.ru\r\n")
+	if err := hostsSetLocal(path, testDomains); err != nil {
+		t.Fatal(err)
+	}
+	if err := hostsRestore(path); err != nil {
+		t.Fatal(err)
+	}
+	got := readHosts(t, path)
+	if !strings.Contains(got, "127.0.0.1 api.rf4game.ru") {
+		t.Fatalf("用户原有生效行不应被改动:\n%s", got)
+	}
+	if !strings.Contains(got, "# rf4s-local 127.0.0.1 api.rf4game.com") {
+		t.Fatalf("launcher 新增行应被还原:\n%s", got)
+	}
+}
+
+func TestHostsSetLocalCreatesBackupAndState(t *testing.T) {
+	original := "127.0.0.1 localhost\r\n"
+	path := writeHosts(t, original)
+	if err := hostsSetLocal(path, testDomains); err != nil {
+		t.Fatal(err)
+	}
+	backups, err := filepath.Glob(path + ".rf4s-backup-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(backups) == 0 {
+		t.Fatal("修改 hosts 前应创建备份")
+	}
+	if got := readHosts(t, backups[0]); got != original {
+		t.Fatalf("备份内容不一致: %q", got)
+	}
+	st := readHostsState(path)
+	if len(st.Owned) != 2 {
+		t.Fatalf("归属状态未保存: %+v", st)
+	}
+}
+
+func TestHostsRestoreClearsOwnershipState(t *testing.T) {
+	path := writeHosts(t, "127.0.0.1 localhost\r\n")
+	if err := hostsSetLocal(path, testDomains); err != nil {
+		t.Fatal(err)
+	}
+	if err := hostsRestore(path); err != nil {
+		t.Fatal(err)
+	}
+	if st := readHostsState(path); len(st.Owned) != 0 {
+		t.Fatalf("还原后归属状态应清空: %+v", st)
+	}
+}

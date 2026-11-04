@@ -166,6 +166,11 @@ func main() {
 	app.sup = supervisor.New(binDir, *configPath, "logs")
 	app.sup.SetStateCallback(func() { updateTrayIcon(app) })
 
+	// 上次异常退出可能遗留 launcher 管理的 hosts 行；先按归属状态恢复官方解析。
+	if err := hostsRestore(hostsFilePath()); err != nil {
+		app.log.Warn("清理上次 hosts 遗留状态失败: " + err.Error())
+	}
+
 	// ---- 按序拉起游戏服务 ----
 	go func() {
 		if err := app.sup.StartAll(); err != nil {
