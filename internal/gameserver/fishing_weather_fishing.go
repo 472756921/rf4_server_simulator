@@ -1,6 +1,7 @@
 package gameserver
 
 import (
+	"context"
 	"math"
 	"time"
 )
@@ -80,17 +81,69 @@ func (s *Server) emptyWeatherBiteLocked(sess *Session, st *FishState, now time.T
 	st.PushSent = false
 	st.Pending = nil
 	st.Resolved = true
-	if s.tunableF("fish_weather_enabled", 0) != 1 || rigTypeLureFamily[st.RigType] || st.Hooked {
+	if s.tunableF("fish_weather_enabled", 0) != 1 || rigTypeLureFamily[st.RigType] || st.Hooked || !st.CastActive || s.weatherRigBroken(s.dbCtx(), sess.Userid, st.GearGuid) {
 		return
-	}
-	if s.DB != nil && st.GearGuid != "" {
-		if rod, _ := s.DB.GetItemByGUID(s.dbCtx(), st.GearGuid); rod != nil && s.itemBrokenForMount(s.dbCtx(), rod) {
-			return
-		}
 	}
 	st.Resolved = false
 	delay := s.biteDelayInWeather(st, sess.weatherAt(st.Loc, now), now, st.Bonus)
 	st.BiteAt = now.Add(time.Duration(delay * float64(time.Second)))
+	st.BiteGen++
 	gen := st.BiteGen
 	st.biteTimer = time.AfterFunc(time.Until(st.BiteAt), func() { s.onBiteTimer(sess.Userid, gen) })
+}
+
+// 共同部件损坏或已知钩（含拟饵内置活性钩）全部损坏时停口；缺少资料保持原行为。
+func (s *Server) weatherRigBroken(ctx context.Context, uid int64, gear string) bool {
+	if s.DB == nil || gear == "" {
+		return false
+	}
+	type hookProbe struct {
+		hook       string
+		baits      []string
+		hostBroken bool
+	}
+	guids := []string{gear}
+	var probes []hookProbe
+	seenHooks := map[string]bool{}
+	if rows, err := s.DB.ListRigComponents(ctx, gear); err == nil {
+		for _, row := range rows {
+			switch row.Slot {
+			case gearCatReel, gearCatLine, gearCatLeader, gearCatLeaderWire:
+				guids = append(guids, row.GUID)
+			case catHook:
+				hookRow, err := s.DB.GetItemByGUID(ctx, row.GUID)
+				if err == nil && hookRow != nil && hookRow.UID == uid && !seenHooks[row.GUID] {
+					probes = append(probes, hookProbe{hook: row.GUID})
+					seenHooks[row.GUID] = true
+				}
+			case catLure:
+				lure, err := s.DB.GetItemByGUID(ctx, row.GUID)
+				if err != nil || lure == nil || lure.UID != uid {
+					continue
+				}
+				hook := s.lureActiveHookGUID(ctx, row.GUID)
+				if hook != "" && !seenHooks[hook] {
+					probes = append(probes, hookProbe{hook: hook, baits: []string{row.GUID}, hostBroken: lure.Durability <= 0})
+					seenHooks[hook] = true
+				}
+			}
+		}
+	}
+	for _, g := range guids {
+		if row, err := s.DB.GetItemByGUID(ctx, g); err == nil && row != nil && row.UID == uid && row.Durability <= 0 {
+			return true
+		}
+	}
+	knownHooks, brokenHooks := 0, 0
+	for _, probe := range probes {
+		def, durability := s.baitedHookDef(ctx, baitedHookSet{hookGUID: probe.hook, baitGUIDs: probe.baits})
+		if def == nil {
+			continue
+		}
+		knownHooks++
+		if durability <= 0 || probe.hostBroken {
+			brokenHooks++
+		}
+	}
+	return knownHooks > 0 && brokenHooks == knownHooks
 }
