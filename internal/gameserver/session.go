@@ -42,8 +42,10 @@ type Session struct {
 	fishPushGUID string
 	fishPushAt   time.Time
 
-	stateMu sync.Mutex
-	state   map[string]any // 会话级业务状态（选图、抛竿状态等）
+	stateMu      sync.Mutex
+	state        map[string]any // 会话级业务状态（选图、抛竿状态等）
+	weatherMu    sync.RWMutex
+	weatherPlans map[string]fishingWeatherPlan
 
 	log *slog.Logger
 }

@@ -398,11 +398,13 @@ func hPlace(ctx *Ctx) ([]byte, bool) {
 		}
 	}
 	key = travelLevelKey(key)
-	body, err := ctx.Sess.Srv.buildMapDobBody(key, time.Now().Unix())
+	nowUnix := time.Now().Unix()
+	body, err := ctx.Sess.Srv.buildMapDobBody(key, nowUnix)
 	if err != nil {
 		ctx.Log.Warn("1/12 dob 构造失败", "level", key, "err", err)
 		return nil, false
 	}
+	ctx.Sess.rememberWeather(key, nowUnix)
 	return body, true
 }
 
@@ -420,7 +422,8 @@ func hTravel(ctx *Ctx) ([]byte, bool) {
 	}
 	key = travelLevelKey(key)
 	sess := ctx.Sess
-	body, err := sess.Srv.buildTravelBody(sess, key)
+	nowUnix := time.Now().Unix()
+	body, err := sess.Srv.buildTravelBodyAt(sess, key, nowUnix)
 	if err != nil {
 		ctx.Log.Warn("1/14 travel 构造失败", "level", key, "err", err)
 		return nil, false
@@ -436,6 +439,7 @@ func hTravel(ctx *Ctx) ([]byte, bool) {
 		return nil, false
 	}
 	sess.Srv.setLevel(sess.Userid, key)
+	sess.rememberWeather(key, nowUnix)
 	ctx.Log.Info("1/14 travel", "level", key, "scene", scene, "spot", spot)
 	return body, true
 }
@@ -472,7 +476,8 @@ func hEnterMap(ctx *Ctx) ([]byte, bool) {
 		scene = sceneForLevel(level)
 	}
 
-	body, err := srv.buildSpawnLocatorBody(level, scene, time.Now().Unix())
+	nowUnix := time.Now().Unix()
+	body, err := srv.buildSpawnLocatorBody(level, scene, nowUnix)
 	if err != nil {
 		ctx.Log.Warn("1/13 出生点定位构造失败", "level", level, "err", err)
 		return nil, false
@@ -482,6 +487,7 @@ func hEnterMap(ctx *Ctx) ([]byte, bool) {
 		return nil, false
 	}
 	srv.setLevel(uid, level)
+	sess.rememberWeather(level, nowUnix)
 	ctx.Log.Info("1/13 下发出生地图", "level", level, "scene", scene, "spot", spot, "bytes", len(body))
 	return body, true
 }

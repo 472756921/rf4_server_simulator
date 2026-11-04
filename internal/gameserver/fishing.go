@@ -162,6 +162,10 @@ func officialPushDelay() float64 { return officialPushDelayWith(nil) }
 // biteDelay 依次应用采样、技能加成、范围约束和倍率。
 // 路亚使用 1.5~6 秒的短窗，避免 14/14 晚于收线窗口。
 func (s *Server) biteDelay(st *FishState, bonuses ...fishingSkillBonus) float64 {
+	return s.biteDelayInWeather(st, fishingWeather{}, time.Now(), bonuses...)
+}
+
+func (s *Server) biteDelayInWeather(st *FishState, weather fishingWeather, now time.Time, bonuses ...fishingSkillBonus) float64 {
 	bonus := neutralFishingSkillBonus()
 	if len(bonuses) > 0 {
 		bonus = bonuses[0]
@@ -185,8 +189,9 @@ func (s *Server) biteDelay(st *FishState, bonuses ...fishingSkillBonus) float64 
 	if fixed > 0 {
 		return math.Max(0.05, fixed)
 	}
+	weatherDelay := s.weatherBiteDelayFactor(st, weather, now)
 	if st != nil && rigTypeLureFamily[st.RigType] {
-		d := 1.5 + rand.Float64()*(6.0-1.5)
+		d := (1.5 + rand.Float64()*(6.0-1.5)) * weatherDelay
 		d *= bonus.BiteSpeed
 		if d < 0.8 {
 			d = 0.8
@@ -199,7 +204,7 @@ func (s *Server) biteDelay(st *FishState, bonuses ...fishingSkillBonus) float64 
 		}
 		return math.Max(0.8, d)
 	}
-	d := officialPushDelay()
+	d := officialPushDelay() * weatherDelay
 	return standardBiteDelay(d, bonus.BiteSpeed, maxDelay, scale)
 }
 
@@ -389,7 +394,7 @@ func (s *Server) rollFish(loc string, bait string) *RolledFish {
 func (s *Server) rollFishForRig(ctx context.Context, uid int64, gearGUID, loc, bait string, bonus fishingSkillBonus, contexts ...fishRollContext) *RolledFish {
 	capKg, ids, weakest := s.gearWeightCapForRig(ctx, uid, gearGUID)
 	c := rollContext(contexts)
-	c.forRig = s.tunableF("fish_bait_rules_enabled", 0) == 1
+	c.forRig = s.tunableF("fish_bait_rules_enabled", 0) == 1 || s.tunableF("fish_weather_enabled", 0) == 1
 	if s.DB != nil && gearGUID != "" {
 		if rod, _ := s.DB.GetItemByGUID(ctx, gearGUID); rod != nil && rod.UID != uid {
 			return nil
@@ -484,7 +489,7 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 				wts[i] = ov.Weight
 				hasPositive = true
 			}
-			if !hasPositive && !strict && !distribution {
+			if !hasPositive && !strict && !distribution && s.tunableF("fish_weather_enabled", 0) != 1 {
 				copy(wts, base)
 				keys = keys[:len(roster)]
 				wts = wts[:len(roster)]
@@ -568,7 +573,11 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 			}
 			continue
 		}
-		if strict && c.forRig && rand.Float64() >= interests[key] {
+		interest := 1.0
+		if strict {
+			interest = interests[key]
+		}
+		if c.forRig && rand.Float64() >= fishingBaitInterest(interest, bonus)*s.weatherFishActivity(key, c) {
 			return nil
 		}
 		grade := s.rollGradeDB(cctx, key, w)
@@ -807,7 +816,7 @@ func (s *Server) rollFishPoolsWithRules(loc string, gearCapKg float64, bonus fis
 		}
 	}
 	e := pool[rand.Intn(len(pool))]
-	interest := 0.0
+	interest := 1.0
 	if strict && c.baits != nil {
 		keys := make([]string, len(pool))
 		wts := make([]float64, len(pool))
@@ -833,7 +842,7 @@ func (s *Server) rollFishPoolsWithRules(loc string, gearCapKg float64, bonus fis
 			}
 		}
 	}
-	if strict && c.forRig && rand.Float64() >= interest {
+	if c.forRig && rand.Float64() >= fishingBaitInterest(interest, bonus)*s.weatherFishActivity(e.species, c) {
 		return nil
 	}
 	// 饵效移动自然峰值，装备只限制可采样的重量范围。
@@ -1248,7 +1257,7 @@ func (s *Server) scheduleBiteState(sess *Session, st *FishState, preserveHooked,
 	st.Bonus = bonus
 	st.BiteGen++
 	gen := st.BiteGen
-	delay := s.biteDelay(st, bonus)
+	delay := s.biteDelayInWeather(st, sess.weatherAt(st.Loc, now), now, bonus)
 	st.BiteAt = now.Add(time.Duration(delay * float64(time.Second)))
 	uid := sess.Userid
 	timer := time.AfterFunc(time.Until(st.BiteAt), func() {
@@ -1342,10 +1351,19 @@ func (s *Server) onBiteTimer(uid int64, gen uint64) {
 		sess.pushChatProbe(27, 17, "", nil)
 		return
 	}
-	if rand.Float64() >= s.biteProbabilityForLoc(st.Loc) || !s.canFishWithBait(s.dbCtx(), uid, st.GearGuid) {
+	if !s.canFishWithBait(s.dbCtx(), uid, st.GearGuid) {
 		// 空竿
 		st.Pending = nil
 		st.Resolved = true
+		st.mu.Unlock()
+		return
+	}
+	probability := s.biteProbabilityForLoc(st.Loc)
+	if s.tunableF("fish_bait_rules_enabled", 0) == 1 || s.tunableF("fish_weather_enabled", 0) == 1 {
+		probability = math.Min(.95, probability)
+	}
+	if rand.Float64() >= probability {
+		s.emptyWeatherBiteLocked(sess, st, now)
 		st.mu.Unlock()
 		return
 	}
@@ -1353,11 +1371,9 @@ func (s *Server) onBiteTimer(uid int64, gen uint64) {
 	if !hasPos {
 		x, z, hasPos = st.PosX, st.PosZ, st.HasPos
 	}
-	f := s.rollFishForRig(s.dbCtx(), uid, st.GearGuid, st.Loc, st.Bait, st.Bonus, fishRollContext{x: x, z: z, hasPos: hasPos, spot: st.Spot, now: now})
+	f := s.rollFishForRig(s.dbCtx(), uid, st.GearGuid, st.Loc, st.Bait, st.Bonus, fishRollContext{x: x, z: z, hasPos: hasPos, spot: st.Spot, depthCM: st.DepthCM, now: now, weather: sess.weatherAt(st.Loc, now)})
 	if f == nil {
-		st.PushSent = false
-		st.Pending = nil
-		st.Resolved = true
+		s.emptyWeatherBiteLocked(sess, st, now)
 		st.mu.Unlock()
 		return
 	}
