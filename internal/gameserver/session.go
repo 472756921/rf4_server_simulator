@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"rf4server/internal/proto"
+	"rf4server/internal/store"
 	"rf4server/internal/tunnel"
 )
 
@@ -46,6 +47,9 @@ type Session struct {
 	state        map[string]any // 会话级业务状态（选图、抛竿状态等）
 	weatherMu    sync.RWMutex
 	weatherPlans map[string]fishingWeatherPlan
+	happyMu      sync.RWMutex
+	happyOpMu    sync.Mutex
+	happyStatus  store.HappyHourStatus
 
 	log *slog.Logger
 }
@@ -213,6 +217,7 @@ func (s *Session) startKeepalive() {
 				if s.closed.Load() {
 					return
 				}
+				s.updateHappyHour(time.Now(), false)
 				pushKeepalive(s)
 				// 每 6 拍（约 30 秒）刷新一次已租用船票的剩余分钟，
 				// 让客户端的到期提示随时间递减（客户端自身不会重算）。
@@ -231,6 +236,7 @@ func (s *Session) startKeepalive() {
 // Close 关闭会话（幂等）。
 func (s *Session) Close(reason string) {
 	if s.closed.CompareAndSwap(false, true) {
+		s.updateHappyHour(time.Now(), true)
 		s.log.Info("会话关闭", "reason", reason)
 		s.stopOnce.Do(func() { close(s.stopCh) })
 		s.Srv.removeSession(s)

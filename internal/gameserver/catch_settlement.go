@@ -135,10 +135,24 @@ func (s *Server) settleCatchOnce(ctx context.Context, uid int64, f *RolledFish, 
 	state := s.stateFor(uid)
 	state.mu.Lock()
 	gear := state.GearGuid
+	if !f.HappyHourKnown {
+		if sess := s.liveSessionByUID(uid); sess != nil {
+			f.HappyHour = sess.currentHappyHour().Active
+		}
+		f.HappyHourKnown = true
+	}
+	happy := f.HappyHour
 	state.mu.Unlock()
 	wear, err := s.prepareCatchWear(ctx, uid, gear)
 	if err != nil {
 		return nil, err
+	}
+	if sess := s.liveSessionByUID(uid); sess != nil {
+		sess.updateHappyHour(time.Now(), false)
+	}
+	var bonuses []catchXPBonus
+	if happy {
+		bonuses = append(bonuses, catchXPBonus{Kind: 56, GUID: zeroGUID, Multiplier: .5, XP: int64(math.Round(float64(xp) * .5))})
 	}
 	tx, err := s.DB.SQL.BeginTx(ctx, nil)
 	if err != nil {
@@ -161,6 +175,12 @@ func (s *Server) settleCatchOnce(ctx context.Context, uid int64, f *RolledFish, 
 		return nil, err
 	}
 	totalXP := xp
+	for _, bonus := range bonuses {
+		if bonus.XP > math.MaxInt64-totalXP {
+			return nil, fmt.Errorf("钓获经验超出范围")
+		}
+		totalXP += bonus.XP
+	}
 	if oldXP > math.MaxInt64-totalXP {
 		return nil, fmt.Errorf("累计经验超出范围")
 	}
@@ -175,14 +195,14 @@ func (s *Server) settleCatchOnce(ctx context.Context, uid int64, f *RolledFish, 
 	if base := baseXp(level); newXP < base {
 		newXP = base
 	}
-	r := catchReceipt{BaseXP: xp, TotalXP: totalXP, Silver: silver, Level: level,
+	r := catchReceipt{Bonuses: bonuses, BaseXP: xp, TotalXP: totalXP, Silver: silver, Level: level,
 		AccumulatedXP: newXP, LevelsGained: max64(0, level-oldLevel), SkillID: 1}
 	r.SkillID = fishingSkillCatForRig(rigType)
 	var oldSkill float64
 	if err := tx.QueryRowContext(ctx, `SELECT MIN(points,100.0) FROM skill WHERE uid=? AND skill_id=?`, uid, r.SkillID).Scan(&oldSkill); err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
-	gain := math.Min(fishingProficiencyGainForRoll(oldSkill, rand.Float64(), rand.Float64()), math.Max(0, profCap-oldSkill))
+	gain := math.Min(fishingProficiencyGainForRoll(oldSkill, happyHourProficiencyRoll(oldSkill, rand.Float64(), happy), rand.Float64()), math.Max(0, profCap-oldSkill))
 	r.SkillGain = &gain
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(weight_g),0) FROM catch_log WHERE uid=? AND fish_key=?`, uid, f.Species).Scan(&r.PreviousBest); err != nil {
 		return nil, err

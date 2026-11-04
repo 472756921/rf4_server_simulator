@@ -36,7 +36,7 @@ test('fishing rule switches save independently, reload and fit supported sizes a
    for(const rule of rules)delete values[rule.key];
    await page.goto(`http://127.0.0.1:${server.address().port}/admin/#fish`,{waitUntil:'networkidle'});
    await page.locator('#fishRulesToggle').waitFor();
-   assert.equal(await page.locator('#fishRulesCard button').count(),3);
+   assert.equal(await page.locator('#fishRulesCard button').count(),4);
    for(const rule of rules){
     assert.equal(await page.locator('#'+rule.prefix+'Toggle').getAttribute('aria-pressed'),String(rule.default==='1'));
     assert.equal(values[rule.key],undefined,'reading default values must not save a switch');

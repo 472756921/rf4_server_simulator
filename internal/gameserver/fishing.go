@@ -60,9 +60,11 @@ type FishState struct {
 
 // RolledFish 待结算/已结算的鱼。
 type RolledFish struct {
-	HookGUID   string
-	BaitGUIDs  string
-	BaitsKnown bool
+	HookGUID       string
+	HappyHour      bool
+	HappyHourKnown bool
+	BaitGUIDs      string
+	BaitsKnown     bool
 
 	FishGUID string
 	Species  string
@@ -80,6 +82,13 @@ type RolledFish struct {
 
 // stateFor 按 uid 取/建状态。
 func (s *Server) stateFor(uid int64) *FishState {
+	st := s.fishingState(uid)
+	s.resumeFishingState(st)
+	return st
+}
+
+// fishingState 读取状态，不因欢乐时光计时查询重排钓鱼回调。
+func (s *Server) fishingState(uid int64) *FishState {
 	s.fishMu.Lock()
 	st, ok := s.fishStates[uid]
 	if !ok {
@@ -87,7 +96,6 @@ func (s *Server) stateFor(uid int64) *FishState {
 		s.fishStates[uid] = st
 	}
 	s.fishMu.Unlock()
-	s.resumeFishingState(st)
 	return st
 }
 
@@ -396,7 +404,7 @@ func (s *Server) rollFish(loc string, bait string) *RolledFish {
 // 再对静态鱼库和内置鱼池应用该上限及奖杯幸运。
 func (s *Server) rollFishForRig(ctx context.Context, uid int64, gearGUID, loc, bait string, bonus fishingSkillBonus, contexts ...fishRollContext) *RolledFish {
 	c := rollContext(contexts)
-	c.forRig = s.tunableF("fish_bait_rules_enabled", 0) == 1 || s.tunableF("fish_weather_enabled", 0) == 1
+	c.forRig = s.tunableF("fish_bait_rules_enabled", 0) == 1 || s.tunableF("fish_weather_enabled", 0) == 1 || c.happyBite > 0
 	c.rigType = s.rigTypeForWrite(ctx, gearGUID)
 	if s.DB != nil && gearGUID != "" {
 		if rod, _ := s.DB.GetItemByGUID(ctx, gearGUID); rod != nil && rod.UID != uid {
@@ -609,7 +617,7 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 		if strict {
 			interest = interests[key]
 		}
-		if c.forRig && rand.Float64() >= fishingBaitInterest(interest, bonus)*s.weatherFishActivity(key, c) {
+		if c.forRig && !c.acceptHappyHourBite(fishingBaitInterest(interest, bonus), s.weatherFishActivity(key, c)) {
 			return nil
 		}
 		grade := s.rollGradeDB(cctx, key, w)
@@ -874,7 +882,7 @@ func (s *Server) rollFishPoolsWithRules(loc string, gearCapKg float64, bonus fis
 			}
 		}
 	}
-	if c.forRig && rand.Float64() >= fishingBaitInterest(interest, bonus)*s.weatherFishActivity(e.species, c) {
+	if c.forRig && !c.acceptHappyHourBite(fishingBaitInterest(interest, bonus), s.weatherFishActivity(e.species, c)) {
 		return nil
 	}
 	// 饵效移动自然峰值，装备只限制可采样的重量范围。
@@ -1302,7 +1310,10 @@ func (s *Server) scheduleBiteState(sess *Session, st *FishState, preserveHooked,
 // onBiteTimer 到点：顺延保护检查 → 判鱼 → 推 14/14。
 func (s *Server) onBiteTimer(uid int64, gen uint64) {
 	sess := s.liveSessionByUID(uid)
-	st := s.stateFor(uid)
+	if sess != nil {
+		sess.updateHappyHour(time.Now(), false)
+	}
+	st := s.fishingState(uid)
 	st.mu.Lock()
 	if gen != st.BiteGen {
 		// 被重排替换掉的旧定时器：既不能清指针，也不能判鱼。否则会把新
@@ -1373,6 +1384,7 @@ func (s *Server) onBiteTimer(uid int64, gen uint64) {
 	if st.Armed != nil {
 		// GM 武装的"下一杆必上"优先，且绕过两道重量上限（arm_next_fish）
 		f := st.Armed
+		f.HappyHour, f.HappyHourKnown = sess.currentHappyHour().Active, true
 		st.Armed = nil
 		f.LocLevel = s.currentLevel(uid)
 		st.Pending = f
@@ -1403,7 +1415,7 @@ func (s *Server) onBiteTimer(uid int64, gen uint64) {
 	if !hasPos {
 		x, z, hasPos = st.PosX, st.PosZ, st.HasPos
 	}
-	f := s.rollFishForRig(s.dbCtx(), uid, st.GearGuid, st.Loc, st.Bait, st.Bonus, fishRollContext{x: x, z: z, hasPos: hasPos, spot: st.Spot, depthCM: st.DepthCM, now: now, weather: sess.weatherAt(st.Loc, now)})
+	f := s.rollFishForRig(s.dbCtx(), uid, st.GearGuid, st.Loc, st.Bait, st.Bonus, fishRollContext{x: x, z: z, hasPos: hasPos, spot: st.Spot, depthCM: st.DepthCM, now: now, weather: sess.weatherAt(st.Loc, now), happyBite: sess.currentHappyHour().BiteBonus})
 	if f == nil {
 		s.emptyWeatherBiteLocked(sess, st, now)
 		st.mu.Unlock()
@@ -1412,6 +1424,7 @@ func (s *Server) onBiteTimer(uid int64, gen uint64) {
 	if !f.BaitsKnown {
 		f.BaitGUIDs, f.BaitsKnown = s.biteBaitSnapshot(s.dbCtx(), st.GearGuid)
 	}
+	f.HappyHour, f.HappyHourKnown = sess.currentHappyHour().Active, true
 	f.LocLevel = s.currentLevel(uid)
 	st.Pending = f
 	gear := st.GearGuid
