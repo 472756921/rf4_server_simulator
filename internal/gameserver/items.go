@@ -230,12 +230,22 @@ func (s *Server) materializeInto(ctx context.Context, class string, def *store.I
 		fill(reelPartKeys, false)
 	case "oldfpclaabo": // 前导 f1/f2（f3 线槽 def 无配置恒 null）
 		fill(leaderPartKeys, false)
-		// f0 强度等于钢丝配置 kngaaefkpka 乘以工艺。
+		if idx := fieldIdxByCS(class, gearAttrLeaderIn); idx >= 0 && idx < len(obj.Fields) {
+			if normalized, changed := normalizeLeaderInnerWire(obj.Fields[idx].Val); changed {
+				obj.Fields[idx].Val = normalized
+			}
+		}
+		// f0 强度取线材与连接件中的最弱值，再乘以成品工艺。
 		if idx := fieldIdxByCS(class, csStrength); idx >= 0 && fieldIsFloat(class, idx) && obj.Fields[idx].Float == 0 {
-			if wireCfg, ok := attrs["mbnambppbom"].(map[string]any); ok {
-				if bits, ok := wireCfg["kngaaefkpka"].(float64); ok {
-					obj.Fields[idx].Float = float64(proto.F32FromBits(uint32(bits)) * float32(workmanship))
+			strength := 0.0
+			for _, key := range []string{"mbnambppbom", "lbadjgllglo"} {
+				cfg, _ := attrs[key].(map[string]any)
+				if value := nestedF32(cfg, gearAttrMaxLoad); value > 0 && (strength == 0 || value < strength) {
+					strength = value
 				}
+			}
+			if strength > 0 {
+				obj.Fields[idx].Float = strength * workmanship
 			}
 		}
 	case "ioombppcnlh": // 拟饵 f0 = args(60) 出厂钩
@@ -248,6 +258,33 @@ func (s *Server) materializeInto(ctx context.Context, class string, def *store.I
 			}
 		}
 	}
+}
+
+// normalizeLeaderInnerWire 修复旧版本把主线对象类直接塞进前导 f1 的记录。
+// cat11 与 cat15 的线材字段名基本一致，按字段名搬到 cat15 对象即可保留
+// 真实外观 numeric_id、强度、线径、长度、耐久和实例 GUID。
+func normalizeLeaderInnerWire(old *proto.Value) (*proto.Value, bool) {
+	if old == nil || old.Kind != proto.KindObj {
+		return old, false
+	}
+	target := categoryWireClass[gearCatLeaderWire]
+	if old.Class == target.Class {
+		return old, false
+	}
+	if old.Class != categoryWireClass[gearCatLine].Class {
+		return old, false
+	}
+	obj, err := wiregen.MakeObj(target.Class, nil)
+	if err != nil {
+		return old, false
+	}
+	for _, targetField := range wiregen.ClassMeta[target.Class].Fields {
+		sourceIdx := fieldIdxByCS(old.Class, targetField.Name)
+		if sourceIdx >= 0 && sourceIdx < len(old.Fields) {
+			obj.Fields[targetField.Idx] = old.Fields[sourceIdx]
+		}
+	}
+	return obj, true
 }
 
 // canonicalizeItemPhysicalFields 是物品物理字段的统一投影入口。
