@@ -402,6 +402,9 @@ func (s *Server) rollFishForRig(ctx context.Context, uid int64, gearGUID, loc, b
 		}
 		c.baits = s.currentBaits(ctx, gearGUID)
 	}
+	if s.tunableF("fish_weather_enabled", 0) == 1 && s.weatherRigBroken(ctx, uid, gearGUID) {
+		return nil
+	}
 	if capKg > 0 {
 		s.log.Info("钓鱼物理上限", "rod", ids.Rod, "reel", ids.Reel,
 			"line", ids.Line, "leader", ids.Leader, "weakest", weakest, "cap_kg", capKg)
