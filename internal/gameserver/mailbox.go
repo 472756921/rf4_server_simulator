@@ -106,10 +106,6 @@ func buildMail11062(m *store.MailRow) *proto.Value {
 
 // notifyMail 在邮件事务提交后向收件人的全部在线会话发送完整邮件快照。
 // 空参数不会给客户端提供新条目；附件仍须通过领取接口进入背包。
-//
-// notifyMail sends the complete mail snapshot to every online recipient session
-// after the mail transaction commits. Empty arguments contain no new entry;
-// attachments still enter inventory only through the claim endpoint.
 func (s *Server) notifyMail(ctx context.Context, uid, id int64) {
 	mail, err := s.DB.MailGet(ctx, uid, id)
 	if err != nil {
