@@ -111,8 +111,8 @@ func TestXpMonotonicLevel(t *testing.T) {
 	}
 }
 
-// TestSettleMembershipDoesNotChangeXP 验证会员身份只影响档案展示，不改变钓获经验。
-func TestSettleMembershipDoesNotChangeXP(t *testing.T) {
+// 没有有效会员或竿体加成时，实际入账和原生经验块保持基础值。
+func TestSettleWithoutXPBonusSources(t *testing.T) {
 	srv, db := newProgressSrv(t)
 	ctx := context.Background()
 
@@ -133,15 +133,15 @@ func TestSettleMembershipDoesNotChangeXP(t *testing.T) {
 		}
 	}
 
-	// 永久会员：不得产生额外 XP 或 Premium 分解项。
-	mk(1000001, 2)
+	// 无有效会员和手持竿时，不产生 Premium 或竿体分解项。
+	mk(1000001, 0)
 	f := fish(1000001)
 	res := srv.settleCatchXP(ctx, 1000001, f, 1)
 	if res.baseXP != 229 {
 		t.Fatalf("基础经验=%d, want 229（perch 642g grade2）", res.baseXP)
 	}
 	if res.totalXP != 229 {
-		t.Fatalf("会员总经验=%d, want 229（会员不增加 XP）", res.totalXP)
+		t.Fatalf("无加成总经验=%d, want 229", res.totalXP)
 	}
 	if f.XP != 229 {
 		t.Fatalf("25 条目 XP=%d, want 229", f.XP)

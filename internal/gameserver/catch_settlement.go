@@ -136,6 +136,10 @@ func (s *Server) settleCatchOnce(ctx context.Context, uid int64, f *RolledFish, 
 	state.mu.Lock()
 	gear := state.GearGuid
 	state.mu.Unlock()
+	bonuses, err := s.rodXPBonuses(ctx, uid, gear, xp)
+	if err != nil {
+		return nil, err
+	}
 	wear, err := s.prepareCatchWear(ctx, uid, gear)
 	if err != nil {
 		return nil, err
@@ -155,12 +159,25 @@ func (s *Server) settleCatchOnce(ctx context.Context, uid int64, f *RolledFish, 
 	} else if err != sql.ErrNoRows {
 		return nil, err
 	}
-	var oldLevel, oldXP int64
-	if err := tx.QueryRowContext(ctx, `SELECT level,xp FROM profile WHERE uid=?`, uid).
-		Scan(&oldLevel, &oldXP); err != nil {
+	var oldLevel, oldXP, membership, membershipExpiresAt int64
+	if err := tx.QueryRowContext(ctx, `SELECT level,xp,membership,membership_exp FROM profile WHERE uid=?`, uid).
+		Scan(&oldLevel, &oldXP, &membership, &membershipExpiresAt); err != nil {
 		return nil, err
 	}
-	totalXP := xp
+	premiumXP := int64(0)
+	if store.MembershipAt(membership, membershipExpiresAt, time.Now().Unix()).Active {
+		premiumXP = xp
+	}
+	if xp > math.MaxInt64-premiumXP {
+		return nil, fmt.Errorf("钓获经验超出范围")
+	}
+	totalXP := xp + premiumXP
+	for _, bonus := range bonuses {
+		if bonus.XP > math.MaxInt64-totalXP {
+			return nil, fmt.Errorf("钓获经验超出范围")
+		}
+		totalXP += bonus.XP
+	}
 	if oldXP > math.MaxInt64-totalXP {
 		return nil, fmt.Errorf("累计经验超出范围")
 	}
@@ -175,7 +192,7 @@ func (s *Server) settleCatchOnce(ctx context.Context, uid int64, f *RolledFish, 
 	if base := baseXp(level); newXP < base {
 		newXP = base
 	}
-	r := catchReceipt{BaseXP: xp, TotalXP: totalXP, Silver: silver, Level: level,
+	r := catchReceipt{Bonuses: bonuses, PremiumXP: premiumXP, BaseXP: xp, TotalXP: totalXP, Silver: silver, Level: level,
 		AccumulatedXP: newXP, LevelsGained: max64(0, level-oldLevel), SkillID: 1}
 	r.SkillID = fishingSkillCatForRig(rigType)
 	var oldSkill float64
