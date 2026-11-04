@@ -161,6 +161,16 @@ func (s *Server) settleCatchOnce(ctx context.Context, uid int64, f *RolledFish, 
 		return nil, err
 	}
 	totalXP := xp
+	var bonuses []catchXPBonus
+	if bonus, err := s.drinkXPBonusTx(ctx, tx, uid, xp, time.Now()); err != nil {
+		return nil, err
+	} else if bonus != nil {
+		if bonus.XP > math.MaxInt64-totalXP {
+			return nil, fmt.Errorf("钓获经验超出范围")
+		}
+		totalXP += bonus.XP
+		bonuses = append(bonuses, *bonus)
+	}
 	if oldXP > math.MaxInt64-totalXP {
 		return nil, fmt.Errorf("累计经验超出范围")
 	}
@@ -175,7 +185,7 @@ func (s *Server) settleCatchOnce(ctx context.Context, uid int64, f *RolledFish, 
 	if base := baseXp(level); newXP < base {
 		newXP = base
 	}
-	r := catchReceipt{BaseXP: xp, TotalXP: totalXP, Silver: silver, Level: level,
+	r := catchReceipt{Bonuses: bonuses, BaseXP: xp, TotalXP: totalXP, Silver: silver, Level: level,
 		AccumulatedXP: newXP, LevelsGained: max64(0, level-oldLevel), SkillID: 1}
 	r.SkillID = fishingSkillCatForRig(rigType)
 	var oldSkill float64
