@@ -23,10 +23,10 @@ type Session struct {
 	// startedAt 本会话登录时刻。客户端世界时钟从登录起按 24 倍速推进，
 	// 船票倒计时的"起始游戏时间"就是按它算的。
 	startedAt time.Time
-	ID     uint64 // 网关分配的会话号
-	Token  string
-	Userid int64
-	Srv    *Server
+	ID        uint64 // 网关分配的会话号
+	Token     string
+	Userid    int64
+	Srv       *Server
 
 	tunnel *tunnel.Conn
 	sendMu sync.Mutex
@@ -36,23 +36,25 @@ type Session struct {
 	stopCh   chan struct{} // 关闭信号（保活循环等监听）
 	stopOnce sync.Once
 
-	stateMu sync.Mutex
-	state   map[string]any // 会话级业务状态（选图、抛竿状态等）
+	stateMu      sync.Mutex
+	state        map[string]any // 会话级业务状态（选图、抛竿状态等）
+	weatherMu    sync.RWMutex
+	weatherPlans map[string]fishingWeatherPlan
 
 	log *slog.Logger
 }
 
 func newSession(srv *Server, id uint64, token string, userid int64, c *tunnel.Conn) *Session {
 	return &Session{
-		ID:     id,
-		Token:  token,
-		Userid: userid,
-		Srv:    srv,
-		tunnel: c,
-		state:  map[string]any{},
+		ID:        id,
+		Token:     token,
+		Userid:    userid,
+		Srv:       srv,
+		tunnel:    c,
+		state:     map[string]any{},
 		startedAt: time.Now(),
-		stopCh: make(chan struct{}),
-		log:    srv.log.With("userid", userid, "sid", id),
+		stopCh:    make(chan struct{}),
+		log:       srv.log.With("userid", userid, "sid", id),
 	}
 }
 
