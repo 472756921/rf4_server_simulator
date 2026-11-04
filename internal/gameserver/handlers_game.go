@@ -915,9 +915,15 @@ func hFishingHooked(ctx *Ctx) ([]byte, bool) {
 	st.mu.Lock()
 	st.Hooked = true
 	pending := st.Pending
+	gear := st.GearGuid
 	castActive := st.CastActive
 	resolved := st.Resolved
 	st.mu.Unlock()
+	if pending != nil {
+		if err := srv.consumeHookedBait(ctx.Sess, pending, gear); err != nil {
+			ctx.Log.Warn("中鱼后鱼饵扣减失败", "fish", pending.FishGUID, "err", err)
+		}
+	}
 
 	// 登录恢复/提前起竿：复用完整判鱼链（概率、GM、装备限重、mounted hook），
 	// 保留本次 Hooked=true；不能直接 roll 后把竿 guid 当 f23。
@@ -933,6 +939,7 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 	//   f0=3：判鱼推送未被接收，6 秒后重推；
 	//   f0=5：鱼弃咬离开，不重推也不作废；
 	//   f0=6：新鱼已替换旧鱼，不重推；
+	//   f0=1/8：当前鱼未中钩离场；钓组仍在水中时重新等待下一尾；
 	//   其他：本轮没有鱼，作废本次等待。
 	srv := ctx.Sess.Srv
 	st := srv.stateFor(ctx.Sess.Userid)
@@ -976,6 +983,28 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 		// 新鱼已替换旧鱼：不重推，保持当前等待状态。
 		ctx.Log.Info("14/12 鱼状态通知", "f0", f0)
 		st.mu.Unlock()
+		return nil, true
+	}
+	if f0 == 1 || f0 == 8 {
+		// 实机日志确认：1 和 8 都会在鱼未中钩、钓组仍在水中时上报。
+		// 它们不代表收竿、断线或钓组离水；
+		// 旧逻辑把 CastActive 一并清掉，导致饵仍在水中却永远不再派鱼。
+		// 只清理当前鱼，并在同一水中钓组上重新安排下一次判鱼。
+		if st.biteTimer != nil {
+			st.biteTimer.Stop()
+			st.biteTimer = nil
+		}
+		st.Pending = nil
+		st.PushSent = false
+		st.Hooked = false
+		st.Resolved = false
+		castActive := st.CastActive
+		inWater := st.InWater
+		st.mu.Unlock()
+		if castActive && inWater {
+			ctx.Log.Info("14/12 鱼未中钩离场，重新排下一尾", "f0", f0)
+			srv.scheduleBiteState(ctx.Sess, st, false, false)
+		}
 		return nil, true
 	}
 	if st.biteTimer != nil {
