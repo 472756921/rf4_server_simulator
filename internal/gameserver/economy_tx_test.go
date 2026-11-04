@@ -376,7 +376,9 @@ func TestPlaceBuyoutAtomicAndIdempotent(t *testing.T) {
 	}
 }
 
-func TestPaperMapBuyUnlocksEveryPlace(t *testing.T) {
+// 纸质地图只是可阅读道具：购买后扣钱、入库，但不写入 place_access，
+// 否则"买张地图"会变成该地点的永久买断（无限访问）。地点买断只走 3/37。
+func TestPaperMapBuyDoesNotUnlockPlace(t *testing.T) {
 	srv, db := newEconomyTxTestServer(t)
 	uid := int64(2007)
 	if _, err := db.SQL.Exec(`INSERT INTO shop_item(store_id,item_id,silver,gold,stock) VALUES
@@ -399,12 +401,12 @@ func TestPaperMapBuyUnlocksEveryPlace(t *testing.T) {
 		}
 		var owned int
 		if err := db.SQL.QueryRow(
-			`SELECT COUNT(*) FROM place_access WHERE uid=? AND place=? AND kind='buyout'`,
+			`SELECT COUNT(*) FROM place_access WHERE uid=? AND place=?`,
 			uid, place).Scan(&owned); err != nil {
 			t.Fatal(err)
 		}
-		if owned != 1 {
-			t.Fatalf("%s 未解锁 %s", itemID, place)
+		if owned != 0 {
+			t.Fatalf("%s 不应写入 place_access（%s），实得 %d 行", itemID, place, owned)
 		}
 	}
 	buy("papermap_torfynoe_01", "level_004_torfyanoe_ozero")
