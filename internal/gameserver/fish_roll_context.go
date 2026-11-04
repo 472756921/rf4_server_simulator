@@ -15,6 +15,7 @@ type fishRollContext struct {
 	forRig  bool
 	depthCM int64
 	weather fishingWeather
+	rigType int64
 }
 
 func rollContext(contexts []fishRollContext) fishRollContext {

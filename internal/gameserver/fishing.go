@@ -395,6 +395,7 @@ func (s *Server) rollFishForRig(ctx context.Context, uid int64, gearGUID, loc, b
 	capKg, ids, weakest := s.gearWeightCapForRig(ctx, uid, gearGUID)
 	c := rollContext(contexts)
 	c.forRig = s.tunableF("fish_bait_rules_enabled", 0) == 1 || s.tunableF("fish_weather_enabled", 0) == 1
+	c.rigType = s.rigTypeForWrite(ctx, gearGUID)
 	if s.DB != nil && gearGUID != "" {
 		if rod, _ := s.DB.GetItemByGUID(ctx, gearGUID); rod != nil && rod.UID != uid {
 			return nil
@@ -502,7 +503,7 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 		for i, key := range keys {
 			base[key] = wts[i]
 		}
-		keys, wts = s.filterFishBaitSet(statLoc, c.baits, keys, wts, c.now)
+		keys, wts = s.filterFishBaitSet(statLoc, c.baits, keys, wts, c.now, c)
 		if len(keys) == 0 {
 			return nil
 		}
@@ -824,7 +825,7 @@ func (s *Server) rollFishPoolsWithRules(loc string, gearCapKg float64, bonus fis
 			keys[i] = p.species
 			wts[i] = 1
 		}
-		keys, wts = s.filterFishBaitSet("", c.baits, keys, wts, c.now)
+		keys, wts = s.filterFishBaitSet("", c.baits, keys, wts, c.now, c)
 		if len(keys) == 0 {
 			return nil
 		}
