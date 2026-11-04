@@ -103,3 +103,30 @@ func RefreshDrinkBonusTx(ctx context.Context, tx *sql.Tx, uid int64, category st
 		uid, category, duration.Milliseconds(), duration.Milliseconds(), sourceGUID)
 	return err
 }
+
+// CleanupDrinkUseReceipts 删除过期的饮酒事务回执。无法解析的旧回执也会清理。
+func (d *DB) CleanupDrinkUseReceipts(ctx context.Context, before time.Time) (int64, error) {
+	tx, err := d.SQL.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `
+		DELETE FROM kv
+		WHERE k GLOB 'drink-use:*'
+		  AND CASE WHEN json_valid(v)
+		           THEN COALESCE(CAST(json_extract(v, '$.created_at') AS INTEGER), 0) < ?
+		           ELSE 1 END`,
+		before.UnixMilli())
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return n, nil
+}

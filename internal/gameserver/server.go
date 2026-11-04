@@ -108,6 +108,13 @@ func (s *Server) Table() *proto.OpsTable { return s.table }
 
 // Serve 隧道服务循环（阻塞）。
 func (s *Server) Serve(ln net.Listener) error {
+	cleanupStop := make(chan struct{})
+	cleanupDone := make(chan struct{})
+	go s.runDrinkUseReceiptCleanup(cleanupStop, cleanupDone)
+	defer func() {
+		close(cleanupStop)
+		<-cleanupDone
+	}()
 	for {
 		nc, err := ln.Accept()
 		if err != nil {

@@ -132,6 +132,7 @@ func TestDrinkUseAtomicQuantityAndF13(t *testing.T) {
 				t.Fatalf("wine effect: remaining=%d duration=%d source=%s", remaining, duration, source)
 			}
 			drinkUseTestCount(t, s, `SELECT COUNT(*) FROM kv WHERE k LIKE 'drink-use:%'`, 1)
+			drinkUseTestCount(t, s, `SELECT COUNT(*) FROM kv WHERE k LIKE 'drink-use:%' AND json_extract(v,'$.created_at') > 0`, 1)
 		})
 	}
 }
@@ -348,4 +349,20 @@ func TestDrinkUseLeavesOtherItemsAndMoveRouteUnchanged(t *testing.T) {
 	}
 	drinkUseTestCount(t, s, `SELECT COUNT(*) FROM drink_bonus_effect`, 0)
 	drinkUseTestCount(t, s, `SELECT COUNT(*) FROM kv WHERE k LIKE 'drink-use:%'`, 0)
+}
+
+func TestDrinkUseReceiptCleanup(t *testing.T) {
+	s := newDrinkUseTestServer(t)
+	if _, err := s.DB.SQL.Exec(`
+		INSERT INTO kv(k,v) VALUES
+		('drink-use:old', '{"created_at":9999}'),
+		('drink-use:fresh', '{"created_at":10001}'),
+		('drink-use:malformed', 'not-json'),
+		('unrelated', '{"created_at":1}')`); err != nil {
+		t.Fatal(err)
+	}
+	s.cleanupDrinkUseReceipts(time.UnixMilli(drinkUseReceiptRetention.Milliseconds() + 10000))
+	drinkUseTestCount(t, s, `SELECT COUNT(*) FROM kv WHERE k='drink-use:old' OR k='drink-use:malformed'`, 0)
+	drinkUseTestCount(t, s, `SELECT COUNT(*) FROM kv WHERE k='drink-use:fresh'`, 1)
+	drinkUseTestCount(t, s, `SELECT COUNT(*) FROM kv WHERE k='unrelated'`, 1)
 }

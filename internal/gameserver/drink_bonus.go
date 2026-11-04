@@ -9,6 +9,11 @@ import (
 	"rf4server/internal/store"
 )
 
+const (
+	drinkUseReceiptRetention     = 10 * time.Minute
+	drinkUseReceiptCleanupPeriod = 5 * time.Minute
+)
+
 func (s *Server) drinkRunKey() string {
 	s.drinkRunOnce.Do(func() { s.drinkKey = newFishGUID() })
 	return s.drinkKey
@@ -57,4 +62,38 @@ func (s *Server) drinkXPBonusTx(ctx context.Context, tx *sql.Tx, uid, baseXP int
 		return nil, nil
 	}
 	return &best, nil
+}
+
+func (s *Server) runDrinkUseReceiptCleanup(stop <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
+	if s == nil || s.DB == nil {
+		return
+	}
+	s.cleanupDrinkUseReceipts(time.Now())
+	ticker := time.NewTicker(drinkUseReceiptCleanupPeriod)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case now := <-ticker.C:
+			s.cleanupDrinkUseReceipts(now)
+		}
+	}
+}
+
+func (s *Server) cleanupDrinkUseReceipts(now time.Time) {
+	if s == nil || s.DB == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	removed, err := s.DB.CleanupDrinkUseReceipts(ctx, now.Add(-drinkUseReceiptRetention))
+	if err != nil {
+		s.log.Warn("饮酒事务回执清理失败", "err", err)
+		return
+	}
+	if removed > 0 {
+		s.log.Info("饮酒事务回执已清理", "rows", removed)
+	}
 }

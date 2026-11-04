@@ -329,3 +329,41 @@ func TestDrinkBonusRejectsInvalidValuesAndEnforcesConstraints(t *testing.T) {
 		}
 	}
 }
+
+func TestCleanupDrinkUseReceipts(t *testing.T) {
+	db, _ := newDrinkBonusDB(t)
+	ctx := context.Background()
+	if _, err := db.SQL.Exec(`
+		INSERT INTO kv(k,v) VALUES
+		('drink-use:old', '{"created_at":9999}'),
+		('drink-use:fresh', '{"created_at":10001}'),
+		('drink-use:malformed', 'not-json'),
+		('unrelated', '{"created_at":1}')`); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := db.CleanupDrinkUseReceipts(ctx, time.UnixMilli(10000))
+	if err != nil || removed != 2 {
+		t.Fatalf("cleanup removed=%d err=%v", removed, err)
+	}
+	assertCount(t, db, `SELECT COUNT(*) FROM kv WHERE k='drink-use:old' OR k='drink-use:malformed'`, 0)
+	assertCount(t, db, `SELECT COUNT(*) FROM kv WHERE k='drink-use:fresh'`, 1)
+	assertCount(t, db, `SELECT COUNT(*) FROM kv WHERE k='unrelated'`, 1)
+}
+
+func TestCleanupDrinkUseReceiptsRollsBack(t *testing.T) {
+	db, _ := newDrinkBonusDB(t)
+	ctx := context.Background()
+	if _, err := db.SQL.Exec(`
+		INSERT INTO kv(k,v) VALUES ('drink-use:old', '{"created_at":1}');
+		CREATE TRIGGER reject_drink_receipt_cleanup BEFORE DELETE ON kv
+		WHEN OLD.k GLOB 'drink-use:*' BEGIN SELECT RAISE(ABORT, 'cleanup failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.CleanupDrinkUseReceipts(ctx, time.UnixMilli(10000)); err == nil {
+		t.Fatal("cleanup failure was ignored")
+	}
+	assertCount(t, db, `SELECT COUNT(*) FROM kv WHERE k='drink-use:old'`, 1)
+	if _, err := db.SQL.Exec(`DROP TRIGGER reject_drink_receipt_cleanup`); err != nil {
+		t.Fatal(err)
+	}
+}

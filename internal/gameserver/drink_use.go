@@ -15,6 +15,7 @@ type drinkUseReceipt struct {
 	BodySHA256     string
 	ExpectResponse bool
 	Body           []byte
+	CreatedAt      int64 `json:"created_at"`
 }
 
 // useAlcoholDrink 将扣物、酒兴和业务回执一起提交；其它物品沿用原处理器。
@@ -139,7 +140,10 @@ func (s *Server) useAlcoholDrink(ctx *Ctx) ([]byte, bool) {
 	if err != nil {
 		return failed(err)
 	}
-	receipt, err := json.Marshal(drinkUseReceipt{BodySHA256: bodySHA, ExpectResponse: ctx.ExpectResponse, Body: body})
+	receipt, err := json.Marshal(drinkUseReceipt{
+		BodySHA256: bodySHA, ExpectResponse: ctx.ExpectResponse, Body: body,
+		CreatedAt: time.Now().UnixMilli(),
+	})
 	if err != nil {
 		return failed(err)
 	}
