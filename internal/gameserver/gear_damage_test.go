@@ -498,8 +498,11 @@ func TestHookBreakDetachesComponentKeepsRod(t *testing.T) {
 	if freshHook.Durability != 0 {
 		t.Fatalf("断钩耐久应归零: %v", freshHook.Durability)
 	}
-	if freshHook.Container != "backpack" || freshHook.RigGUID != "" {
-		t.Fatalf("损坏组件应退回背包: container=%q rig_guid=%q", freshHook.Container, freshHook.RigGUID)
+	if freshHook.Container != "backpack" || freshHook.RigGUID != "" || freshHook.Slot != 0 {
+		t.Fatalf("损坏组件应退回背包: container=%q rig_guid=%q slot=%d", freshHook.Container, freshHook.RigGUID, freshHook.Slot)
+	}
+	if got := rigStoredGUID(t, freshHook, csParent); got != "" {
+		t.Fatalf("损坏组件快照仍保留父件: %s", got)
 	}
 	// 等价重登后重建容器：按背包容器查询仍能读到该组件。
 	bagRows, err := srv.DB.ListItemsByContainer(ctx, uid, "backpack")
@@ -532,5 +535,45 @@ func TestHookBreakDetachesComponentKeepsRod(t *testing.T) {
 	}
 	if seen[damageEventRodBreak] || seen[damageEventLineBreak] {
 		t.Fatalf("钩断不应记录 rod_break/line_break: %+v", seen)
+	}
+}
+
+func TestTerminalComponentProjectionOnlyBreakCleansProjection(t *testing.T) {
+	srv, db := newRigTestServer(t)
+	ctx := context.Background()
+	const uid = int64(1000001)
+
+	rod, err := srv.CreateItem(ctx, uid, "tele_10012_tl16", "backpack", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook, err := srv.CreateItem(ctx, uid, "clas_20163", "backpack", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 模拟历史/部分同步状态：rig_component 有投影，但竿 f5 尚未包含该组件。
+	if err := db.SetItemRigLink(ctx, hook.GUID, rod.GUID, catHook); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.UpsertRigComponentAt(ctx, rod.GUID, catHook, 0, hook.GUID, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	outcome, err := srv.breakLineOrRod(ctx, uid, rod.GUID, hook.GUID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome == nil || !outcome.ComponentBroken {
+		t.Fatalf("应裁决为终端件断裂: %+v", outcome)
+	}
+	if got := rigSlotGUIDs(t, srv, rod.GUID)[catHook]; got != "" {
+		t.Fatalf("仅投影存在的组件断裂后仍残留 rig_component: %s", got)
+	}
+	freshHook := mustItem(t, db, hook.GUID)
+	if freshHook.Container != "backpack" || freshHook.RigGUID != "" || freshHook.Slot != 0 {
+		t.Fatalf("损坏组件应退回背包: container=%q rig_guid=%q slot=%d", freshHook.Container, freshHook.RigGUID, freshHook.Slot)
+	}
+	if got := rigStoredGUID(t, freshHook, csParent); got != "" {
+		t.Fatalf("损坏组件快照仍保留父件: %s", got)
 	}
 }

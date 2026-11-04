@@ -241,11 +241,19 @@ func (s *Server) breakComponentTx(ctx context.Context, uid int64, rodGUID string
 		return nil, errDurabilityField
 	}
 	comp.Durability = 0
+	comp.Container = "backpack"
+	comp.Slot = 0
+	comp.RigGUID = ""
+	clearRigFieldsForBackpack(compFields, comp.WireClass)
 	if err := updateItemFieldsTx(ctx, s.DB, tx, comp, compFields); err != nil {
 		return nil, err
 	}
+	// 投影可能先于 f5 存在；摘除投影不能依赖 f5 是否命中。
+	if _, err := tx.ExecContext(ctx, `DELETE FROM rig_component WHERE rig_guid=? AND guid=?`, rodGUID, comp.GUID); err != nil {
+		return nil, err
+	}
 
-	// 从 f5 钓组存储与 rig_component 投影中摘除该组件。
+	// 从 f5 钓组存储中摘除该组件。
 	rodFields, err := FieldsFromJSON(rod.FieldsJSON)
 	if err != nil {
 		return nil, err
@@ -256,9 +264,6 @@ func (s *Server) breakComponentTx(ctx context.Context, uid int64, rodGUID string
 	for key, c := range comps {
 		if c.GUID == comp.GUID {
 			delete(comps, key)
-			if _, err := tx.ExecContext(ctx, `DELETE FROM rig_component WHERE rig_guid=? AND guid=?`, rodGUID, comp.GUID); err != nil {
-				return nil, err
-			}
 			detached = true
 			break
 		}
@@ -283,8 +288,6 @@ func (s *Server) breakComponentTx(ctx context.Context, uid int64, rodGUID string
 	if err := s.DB.DetachReturnToBackpackTx(ctx, tx, comp.GUID); err != nil {
 		return nil, err
 	}
-	comp.Container = "backpack"
-	comp.RigGUID = ""
 	entry := store.ItemDamageLog{
 		UID: uid, ItemGUID: comp.GUID, ItemID: comp.ItemID, Event: damageEventComponentBreak,
 		BeforeDurability: ptrFloat64(before), AfterDurability: ptrFloat64(0), BrokenGUID: comp.GUID,
