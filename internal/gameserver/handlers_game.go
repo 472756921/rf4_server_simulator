@@ -913,12 +913,14 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 		if st.biteTimer != nil {
 			st.biteTimer.Stop()
 		}
+		pending := st.Pending
 		st.Resolved = true
 		st.Pending = nil
 		st.CastActive = false
 		st.Hooked = false
 		st.mu.Unlock()
 		srv.bumpFishingCounter(ctx.Sess.Userid, "escapes")
+		srv.notifyFishEscape(ctx.Sess, pending, "脱钩")
 		return nil, true
 	}
 	if f0 == 6 {
@@ -930,11 +932,13 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 	if st.biteTimer != nil {
 		st.biteTimer.Stop()
 	}
+	pending := st.Pending
 	st.Resolved = true
 	st.Pending = nil
 	st.CastActive = false
 	st.mu.Unlock()
 	srv.bumpFishingCounter(ctx.Sess.Userid, "escapes")
+	srv.notifyFishEscape(ctx.Sess, pending, "脱钩离开")
 	return nil, true
 }
 

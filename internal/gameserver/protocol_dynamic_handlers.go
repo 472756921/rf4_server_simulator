@@ -132,6 +132,7 @@ func hDynamicRodBreak(ctx *Ctx) ([]byte, bool) {
 			if st.biteTimer != nil {
 				st.biteTimer.Stop()
 			}
+			pending := st.Pending
 			st.Pending = nil
 			st.CastActive = false
 			st.Hooked = false
@@ -163,6 +164,19 @@ func hDynamicRodBreak(ctx *Ctx) ([]byte, bool) {
 				"broken", shortGUID(outcome.BrokenGUID), "line", outcome.LineBroken,
 				"comp", outcome.ComponentBroken,
 				"line_loss_m", outcome.LineLossM, "removed", len(outcome.RemovedGUIDs))
+			// 断件必丢鱼：11028 只表达装备损坏，另经聊天频道提示跑鱼。
+			reason := "断竿"
+			switch {
+			case outcome.ComponentBroken:
+				reason = "钓组组件断裂"
+			case outcome.ReelDamaged:
+				reason = "渔线轮超载"
+			case outcome.LineBroken && outcome.BreakPart == "leader":
+				reason = "断子线"
+			case outcome.LineBroken:
+				reason = "断主线"
+			}
+			srv.notifyFishEscape(ctx.Sess, pending, reason)
 			return body, true
 		}
 		ctx.Log.Warn("17/9 断件写库失败，回退兼容响应", "rod", shortGUID(rodGUID), "err", err)
