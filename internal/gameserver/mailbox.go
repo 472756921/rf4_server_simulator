@@ -104,6 +104,33 @@ func buildMail11062(m *store.MailRow) *proto.Value {
 	})
 }
 
+// notifyMail 在邮件事务提交后向收件人的全部在线会话发送完整邮件快照。
+// 空参数不会给客户端提供新条目；附件仍须通过领取接口进入背包。
+//
+// notifyMail sends the complete mail snapshot to every online recipient session
+// after the mail transaction commits. Empty arguments contain no new entry;
+// attachments still enter inventory only through the claim endpoint.
+func (s *Server) notifyMail(ctx context.Context, uid, id int64) {
+	mail, err := s.DB.MailGet(ctx, uid, id)
+	if err != nil {
+		s.log.Warn("邮件在线通知读取失败", "uid", uid, "mail_id", id, "err", err)
+		return
+	}
+	if mail.Read != 0 {
+		return
+	}
+	body := proto.Args524(buildMail11062(mail))
+	var sent int
+	for _, sess := range s.sessionsForUID(uid) {
+		if sess.Push(19, 10, body) != 0 {
+			sent++
+		} else {
+			s.log.Warn("邮件在线通知发送失败", "uid", uid, "mail_id", id, "sid", sess.ID)
+		}
+	}
+	s.log.Info("邮件在线通知", "uid", uid, "mail_id", id, "sessions", sent)
+}
+
 // hMailGet 19/7：args("524")[11062...]。
 func hMailGet(ctx *Ctx) ([]byte, bool) {
 	if !ctx.Sess.Srv.requireDB(ctx) {
@@ -145,17 +172,24 @@ func hMailSendMessage(ctx *Ctx) ([]byte, bool) {
 	if toUID > 0 && toUID != ctx.Sess.Userid {
 		cctx := ctx.Sess.pushCtx()
 		tx, err := beginEconomyTx(cctx, srv.DB)
+		var mailID int64
 		if err == nil {
 			defer func() { _ = tx.Rollback() }()
-			_, err = tx.ExecContext(cctx, `
+			var result sql.Result
+			result, err = tx.ExecContext(cctx, `
 				INSERT INTO mail(uid, sender, kind, text, items_json, created_ts, read)
 				VALUES(?,?,0,?,NULL,?,0)`, toUID, ctx.Sess.Userid, text, float64(time.Now().Unix()))
+			if err == nil {
+				mailID, err = result.LastInsertId()
+			}
 			if err == nil {
 				err = tx.Commit()
 			}
 		}
 		if err != nil {
 			ctx.Log.Warn("19/1 发送文本邮件失败", "to", toUID, "err", err)
+		} else {
+			srv.notifyMail(cctx, toUID, mailID)
 		}
 	}
 	return []byte{0x00}, true
@@ -382,17 +416,23 @@ func hMailSendItem(ctx *Ctx) ([]byte, bool) {
 	if err != nil {
 		return []byte{0x0F}, true
 	}
-	_, err = tx.ExecContext(cctx, `
+	result, err := tx.ExecContext(cctx, `
 		INSERT INTO mail(uid, sender, kind, text, items_json, attachment_snapshot_version, created_ts, read)
 		VALUES(?,?,1,'',?,?,?,0)`, toUID, uid, string(raw), mailItemSnapshotVersion, float64(time.Now().Unix()))
 	if err != nil {
 		ctx.Log.Warn("19/2 创建附件邮件失败", "to", toUID, "err", err)
 		return []byte{0x0F}, true
 	}
+	mailID, err := result.LastInsertId()
+	if err != nil {
+		ctx.Log.Warn("19/2 读取邮件编号失败", "err", err)
+		return []byte{0x0F}, true
+	}
 	if err := tx.Commit(); err != nil {
 		ctx.Log.Warn("19/2 事务提交失败", "err", err)
 		return []byte{0x0F}, true
 	}
+	srv.notifyMail(cctx, toUID, mailID)
 	if locked.Qty == 0 {
 		ctx.Sess.Push4_21([]string{locked.GUID})
 	}
@@ -776,8 +816,10 @@ func (s *Server) execAdminCmd(cmd *AdminCommand) {
 			s.log.Info("管理指令：删除护网鱼", "uid", cmd.UID, "count", len(cmd.KeepnetGUIDs))
 		}
 	case "send_mail":
-		if _, err := s.DB.MailInsert(ctx, cmd.UID, 0, 0, cmd.Text, cmd.Items); err != nil {
+		if id, err := s.DB.MailInsert(ctx, cmd.UID, 0, 0, cmd.Text, cmd.Items); err != nil {
 			s.log.Warn("管理指令：发邮件失败", "uid", cmd.UID, "err", err)
+		} else {
+			s.notifyMail(ctx, cmd.UID, id)
 		}
 	case "arm_fish":
 		st := s.stateFor(cmd.UID)
