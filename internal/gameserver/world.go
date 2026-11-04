@@ -111,12 +111,32 @@ func hItemMove(ctx *Ctx) ([]byte, bool) {
 }
 
 // hItemRemove 4/7：删除物品 → 回快照。
+// 载荷为 args("524")[容器枚举, GuidArr]。容器=5（鱼护）时目标是 keepnet
+// 表的回显 GUID（扔回水里），不在 item 表——按原路径静默无操作会让鱼护
+// 里的鱼扔不出去，需要分流到 KeepnetDelete。
 func hItemRemove(ctx *Ctx) ([]byte, bool) {
 	srv := ctx.Sess.Srv
 	if !srv.requireDB(ctx) {
 		return nil, false
 	}
 	guids := deepGUIDs(ctx.Tree)
+	ints := treeIntsDeep(ctx.Tree)
+	if len(ints) > 0 && ints[0] == containerKeepnet {
+		removed := make([]string, 0, len(guids))
+		for _, g := range guids {
+			if e, err := srv.DB.KeepnetGet(ctx.Sess.pushCtx(), ctx.Sess.Userid, g); err == nil && e != nil {
+				removed = append(removed, g)
+			}
+		}
+		if len(removed) > 0 {
+			if err := srv.DB.KeepnetDelete(ctx.Sess.pushCtx(), ctx.Sess.Userid, removed); err == nil {
+				ctx.Sess.Push4_21(removed)
+			} else {
+				ctx.Log.Warn("4/7 鱼护删除失败", "err", err, "count", len(removed))
+			}
+		}
+		return srv.rigSnapshot800(ctx), true
+	}
 	owned := make([]string, 0, len(guids))
 	for _, g := range guids {
 		row, err := srv.DB.GetItemByGUID(ctx.Sess.pushCtx(), g)
