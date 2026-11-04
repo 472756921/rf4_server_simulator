@@ -245,10 +245,19 @@ func TestSelectedHookPushUsesSelectedHookAndConsumesOnlyItsBait(t *testing.T) {
 	if row, _ := db.GetItemByGUID(t.Context(), groups[0].baitGUIDs[0]); row == nil || baitQuantity(row) != 1 {
 		t.Fatal("other hook bait was consumed")
 	}
+	if row, _ := db.GetItemByGUID(t.Context(), groups[1].baitGUIDs[0]); row == nil || baitQuantity(row) != 1 {
+		t.Fatal("selected hook bait was consumed before hook confirmation")
+	}
+	if err := s.consumeHookedBait(sess, f, rod); err != nil {
+		t.Fatal(err)
+	}
 	if row, _ := db.GetItemByGUID(t.Context(), groups[1].baitGUIDs[0]); row != nil {
-		t.Fatal("selected hook bait was not consumed")
+		t.Fatal("selected hook bait was not consumed after hook confirmation")
 	}
 	s.pushBaitedFish(sess, f, rod)
+	if err := s.consumeHookedBait(sess, f, rod); err != nil {
+		t.Fatal(err)
+	}
 	if row, _ := db.GetItemByGUID(t.Context(), groups[0].baitGUIDs[0]); row == nil || baitQuantity(row) != 1 {
 		t.Fatal("replay consumed another hook bait")
 	}

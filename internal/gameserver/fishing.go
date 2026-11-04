@@ -1423,7 +1423,7 @@ func (s *Server) onBiteTimer(uid int64, gen uint64) {
 
 // repushPending14_14 在 14/12 f0=3 时于 6 秒后重推同一尾 pending 鱼，
 // 不重新判定，以保持 GUID、重量和曲线不变。
-func (s *Server) repushPending14_14(uid int64) {
+func (s *Server) repushPending14_14(uid int64, expectedFishGUID ...string) {
 	st := s.stateFor(uid)
 	sess := s.liveSessionByUID(uid)
 	st.mu.Lock()
@@ -1439,6 +1439,10 @@ func (s *Server) repushPending14_14(uid int64) {
 		return
 	}
 	f := st.Pending
+	if len(expectedFishGUID) > 0 && expectedFishGUID[0] != "" && f.FishGUID != expectedFishGUID[0] {
+		st.mu.Unlock()
+		return
+	}
 	gear := st.GearGuid
 	st.PushSent = true
 	st.persist.recoverPending = false

@@ -536,18 +536,24 @@ func (s *Server) pushBaitedFish(sess *Session, f *RolledFish, rod string) {
 	if hook == "" {
 		hook = s.mountedHookGuid(s.dbCtx(), rod)
 	}
-	var change baitChange
-	if f.BaitsKnown {
-		var err error
-		change, err = s.consumeBaitEvent(sess.pushCtx(), sess.Userid, rod, f.FishGUID, strings.Fields(f.BaitGUIDs), false)
-		if err != nil {
-			s.log.Warn("鱼饵扣减失败，稍后重试", "uid", sess.Userid, "err", err)
-			time.AfterFunc(6*time.Second, func() { s.repushPending14_14(sess.Userid) })
-			return
-		}
-	}
+	// 14/14 只是把鱼放进客户端水下行为系统，此时鱼还没有真正咬钩。
+	// 若在这里删除钩饵并推 4/21、4/22，客户端会立即看到空钩，随后让鱼以
+	// 14/12 f0=1 离场。饵必须保留到客户端用 14/11 确认中鱼后再扣除。
 	sess.Push14_14(f, hook, rod)
+}
+
+// consumeHookedBait 在客户端确认中鱼后扣除本次咬口使用的饵。
+// FishGUID 作为事务幂等键，重复 14/11 不会重复扣除。
+func (s *Server) consumeHookedBait(sess *Session, f *RolledFish, rod string) error {
+	if sess == nil || f == nil || !f.BaitsKnown {
+		return nil
+	}
+	change, err := s.consumeBaitEvent(sess.pushCtx(), sess.Userid, rod, f.FishGUID, strings.Fields(f.BaitGUIDs), false)
+	if err != nil {
+		return err
+	}
 	sess.pushBaitChange(change)
+	return nil
 }
 
 func (s *Server) consumeCastBait(sess *Session, st *FishState) error {

@@ -84,7 +84,7 @@ func awaitPushEnvelope(t *testing.T, gc *tunnel.Conn) *proto.Envelope {
 	}
 }
 
-// 脱钩（14/12 f0=5）应经聊天频道（24/27，kind=0）推送跑鱼提示：
+// 脱钩（14/12 f0=8）应经聊天频道（24/27，kind=0）推送跑鱼提示：
 // 客户端自身只播放脱钩动画，没有任何文字提示。
 func TestFishEscapePushesSystemChat(t *testing.T) {
 	srv, _ := newRigTestServer(t)
@@ -97,9 +97,9 @@ func TestFishEscapePushesSystemChat(t *testing.T) {
 	st.mu.Unlock()
 
 	tree := proto.Args524(proto.Obj("lhicjpmglbo", 0,
-		proto.Field{Op: "U32", Num: ptrU64(5)}))
+		proto.Field{Op: "U32", Num: ptrU64(8)}))
 	if _, ok := hFishingLeft(miscCtx(sess, 14, 12, tree)); !ok {
-		t.Fatal("14/12 f0=5 未处理")
+		t.Fatal("14/12 f0=8 未处理")
 	}
 
 	env := awaitPushEnvelope(t, gc)

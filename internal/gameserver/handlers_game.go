@@ -915,9 +915,15 @@ func hFishingHooked(ctx *Ctx) ([]byte, bool) {
 	st.mu.Lock()
 	st.Hooked = true
 	pending := st.Pending
+	gear := st.GearGuid
 	castActive := st.CastActive
 	resolved := st.Resolved
 	st.mu.Unlock()
+	if pending != nil {
+		if err := srv.consumeHookedBait(ctx.Sess, pending, gear); err != nil {
+			ctx.Log.Warn("中鱼后鱼饵扣减失败", "fish", pending.FishGUID, "err", err)
+		}
+	}
 
 	// 登录恢复/提前起竿：复用完整判鱼链（概率、GM、装备限重、mounted hook），
 	// 保留本次 Hooked=true；不能直接 roll 后把竿 guid 当 f23。
@@ -930,10 +936,9 @@ func hFishingHooked(ctx *Ctx) ([]byte, bool) {
 
 func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 	// 14/12 的 f0 是客户端鱼实体状态变化：
-	//   f0=3：判鱼推送未被接收，6 秒后重推；
-	//   f0=5：鱼弃咬离开，不重推也不作废；
-	//   f0=6：新鱼已替换旧鱼，不重推；
-	//   其他：本轮没有鱼，作废本次等待。
+	//   f0=3/5/6：客户端因钓组状态拒收鱼实体，保留当前鱼并延迟重推；
+	//   f0=1/2/8：当前鱼未中钩离场；钓组仍在水中时重新等待下一尾；
+	//   其他：保守按本轮没有鱼处理。
 	srv := ctx.Sess.Srv
 	st := srv.stateFor(ctx.Sess.Userid)
 	f0 := uint32(0)
@@ -944,38 +949,49 @@ func hFishingLeft(ctx *Ctx) ([]byte, bool) {
 	}
 	st.mu.Lock()
 	ctx.Log.Info("14/12 鱼状态", "f0", f0)
-	if f0 == 3 {
+	if f0 == 3 || f0 == 5 || f0 == 6 {
+		// 客户端尚未接收鱼实体：保留当前鱼，延迟重推同一尾，
+		// 不能把不兼容的钓组状态误当成鱼已离场。
+		if st.biteTimer != nil {
+			st.biteTimer.Stop()
+			st.biteTimer = nil
+		}
 		st.PushSent = false
+		st.Hooked = false
 		pending := st.Pending
 		castActive := st.CastActive
 		st.mu.Unlock()
 		if castActive && pending != nil {
 			uid := ctx.Sess.Userid
-			time.AfterFunc(6*time.Second, func() { srv.repushPending14_14(uid) })
+			fishGUID := pending.FishGUID
+			time.AfterFunc(6*time.Second, func() { srv.repushPending14_14(uid, fishGUID) })
 		}
 		return nil, true
 	}
-	if f0 == 5 {
-		// 鱼已脱钩离开（含断线跑鱼）：本轮作废，后续 14/4 不能再结算成渔获。
-		// 否则会出现"鱼线已断、鱼却进了护网"的错账。
-		ctx.Log.Info("14/12 鱼已脱钩离开", "f0", f0)
+	if f0 == 1 || f0 == 2 || f0 == 8 {
+		// 实机日志确认：1/2/8 会在鱼未中钩、钓组仍在水中时上报。
+		// 它们不代表收竿、断线或钓组离水；
+		// 旧逻辑把 CastActive 一并清掉，导致饵仍在水中却永远不再派鱼。
+		// 只清理当前鱼，并在同一水中钓组上重新安排下一次判鱼。
 		if st.biteTimer != nil {
 			st.biteTimer.Stop()
+			st.biteTimer = nil
 		}
 		pending := st.Pending
-		st.Resolved = true
 		st.Pending = nil
-		st.CastActive = false
+		st.PushSent = false
 		st.Hooked = false
+		st.Resolved = false
+		castActive := st.CastActive
+		inWater := st.InWater
 		st.mu.Unlock()
-		srv.bumpFishingCounter(ctx.Sess.Userid, "escapes")
-		srv.notifyFishEscape(ctx.Sess, pending, "脱钩")
-		return nil, true
-	}
-	if f0 == 6 {
-		// 新鱼已替换旧鱼：不重推，保持当前等待状态。
-		ctx.Log.Info("14/12 鱼状态通知", "f0", f0)
-		st.mu.Unlock()
+		if pending != nil {
+			srv.notifyFishEscape(ctx.Sess, pending, "脱钩离开")
+		}
+		if castActive && inWater {
+			ctx.Log.Info("14/12 鱼未中钩离场，重新排下一尾", "f0", f0)
+			srv.scheduleBiteState(ctx.Sess, st, false, false)
+		}
 		return nil, true
 	}
 	if st.biteTimer != nil {
