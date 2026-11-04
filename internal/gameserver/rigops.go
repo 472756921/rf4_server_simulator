@@ -873,8 +873,10 @@ func (s *Server) materializeHanditemChild(ctx context.Context, uid int64, parent
 	return childGUID, itemGUID
 }
 
-// baitFullStackRod 判断 parentGUID 是否浮钓族竿（钩饵整包装填适用）。
-// 竿缺失或钓组类型未知时保守返回 false，维持原拆分路径。
+// baitFullStackRod 判断 parentGUID 是否适用钩饵整包装填。
+// 浮钓/沉底族单钩钓组整包上饵；多钩钓组（模板钩槽数 >1 或实际挂载钩 >1，
+// 如串钩、多钩水底）保持一钩一份的逐份拆分配饵。竿缺失或钓组类型未知时
+// 保守返回 false，维持原拆分路径。
 func (s *Server) baitFullStackRod(ctx context.Context, parentGUID string) bool {
 	if s.DB == nil || parentGUID == "" {
 		return false
@@ -883,7 +885,19 @@ func (s *Server) baitFullStackRod(ctx context.Context, parentGUID string) bool {
 	if err != nil || prow == nil {
 		return false
 	}
-	return floatBaitRigTypes[s.rigTypeOfItem(ctx, prow)]
+	rigType := s.rigTypeOfItem(ctx, prow)
+	if !baitFullStackRigTypes[rigType] {
+		return false
+	}
+	if len(slotIndicesFor(rigType, catHook)) > 1 || len(slotIndicesFor(rigType, catLure)) > 1 {
+		return false
+	}
+	// 模板可能不反映实际挂载：已挂第二口钩时同样降级（与
+	// consumeBaitEvent 的多钩分支用同一计数方式）。
+	if comps := s.storedRigComponents(ctx, parentGUID); len(rigCompKeysOfCategory(comps, catHook)) > 1 {
+		return false
+	}
+	return true
 }
 
 // setHanditemLoadedRef 将手持工具字段 f1 设为当前装填物 GUID；空字符串表示清空。

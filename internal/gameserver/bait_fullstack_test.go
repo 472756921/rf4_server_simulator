@@ -1,8 +1,9 @@
 package gameserver
 
-// 浮钓族钩饵整包装填回归（2026-11-04 用户需求）：
-// 手杆挂饵应挂背包里的一整包，咬口逐份扣减，不再每中一条鱼就空钩重挂。
-// 沉底族多钩逐份配饵、路亚假饵非计件，必须保持原路径。
+// 钩饵整包装填回归（2026-11-04 用户需求，2026-11-05 扩展水底族）：
+// 浮钓与沉底单钩钓组挂饵应挂背包里的一整包，咬口逐份扣减，
+// 不再每次试探咬口就空钩重挂。多钩水底钓组逐份配饵、
+// 路亚假饵非计件，必须保持原路径。
 
 import (
 	"testing"
@@ -32,7 +33,7 @@ func TestFloatBaitMountsFullStack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rt := s.rigTypeForWrite(t.Context(), rod.GUID); !floatBaitRigTypes[rt] {
+	if rt := s.rigTypeForWrite(t.Context(), rod.GUID); !baitFullStackRigTypes[rt] {
 		t.Fatalf("tele_10112_5 应为浮钓族，实得 rigType=%d", rt)
 	}
 	src, child := mountBaitForFullStackTest(t, s, rod.GUID, "bread", 15)
@@ -135,24 +136,57 @@ func TestFloatBaitExhaustWritesRebaitAndAutoRemountsFullStack(t *testing.T) {
 	}
 }
 
-func TestBottomBaitMountStillSplits(t *testing.T) {
+func TestBottomSingleHookBaitMountsFullStack(t *testing.T) {
 	s, _ := newRigTestServer(t)
 	rod, err := s.CreateItem(t.Context(), 1000001, "feeder_10126_FD390", "backpack", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rt := s.rigTypeForWrite(t.Context(), rod.GUID); !bottomRigTypes[rt] {
+	rt := s.rigTypeForWrite(t.Context(), rod.GUID)
+	if !bottomRigTypes[rt] {
 		t.Fatalf("feeder 竿应为沉底族，实得 rigType=%d", rt)
+	}
+	if len(slotIndicesFor(rt, catHook)) > 1 {
+		t.Fatalf("该沉底钓组应为单钩模板，实得钩槽 %v", slotIndicesFor(rt, catHook))
 	}
 	src, child := mountBaitForFullStackTest(t, s, rod.GUID, "bread", 5)
 
-	row, _ := s.DB.GetItemByGUID(t.Context(), src)
-	if row == nil || baitQuantity(row) != 4 {
-		t.Fatalf("沉底族必须保持拆分：来源堆应剩 4 份，实得 %+v", row)
+	if row, _ := s.DB.GetItemByGUID(t.Context(), src); row != nil {
+		t.Fatalf("沉底单钩整包挂载后来源堆应移除: %+v", row)
 	}
 	mounted, _ := s.DB.GetItemByGUID(t.Context(), child)
-	if mounted == nil || baitQuantity(mounted) != 1 {
-		t.Fatalf("沉底族挂载实例应为 1 份: %+v", mounted)
+	if mounted == nil || baitQuantity(mounted) != 5 {
+		t.Fatalf("沉底单钩应整包挂载 5 份: %+v", mounted)
+	}
+}
+
+func TestBaitFullStackRodGate(t *testing.T) {
+	s, _ := newRigTestServer(t)
+	feeder, err := s.CreateItem(t.Context(), 1000001, "feeder_10126_FD390", "backpack", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tele, err := s.CreateItem(t.Context(), 1000001, "tele_10112_5", "backpack", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.baitFullStackRod(t.Context(), feeder.GUID) {
+		t.Fatal("沉底单钩钓组（简易水底）应整包装填")
+	}
+	if !s.baitFullStackRod(t.Context(), tele.GUID) {
+		t.Fatal("浮钓单钩钓组应整包装填")
+	}
+	// 淡水模板全部单钩（钩槽 idx 250 唯一），多钩模板只存在于海竿族；
+	// 家族门卫必须把海竿族挡在整包之外。
+	marine, err := s.CreateItem(t.Context(), 1000001, "feeder_10126_FD390", "backpack", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.rigSetType(t.Context(), 1000001, marine.GUID, 59) { // 海竿三钩位
+		t.Fatal("rigSetType 失败")
+	}
+	if s.baitFullStackRod(t.Context(), marine.GUID) {
+		t.Fatal("海竿族（多钩模板）不应整包装填")
 	}
 }
 
