@@ -678,6 +678,21 @@ func (s *Server) setWireParent(ctx context.Context, row *store.Item, parentGUID 
 	s.saveItemFields(ctx, row, fields)
 }
 
+// clearRigFieldsForBackpack 清理物品快照中的装配引用，使客户端按背包物品解析。
+// 调用方负责落库；事务路径随后由 updateItemFieldsTx 更新时间戳。
+func clearRigFieldsForBackpack(fields []proto.Field, wireClass string) {
+	if p := fieldIdxByCS(wireClass, csParent); p >= 0 && p < len(fields) &&
+		(fields[p].Op == "OPTGUID" || fields[p].Op == "GUID16") {
+		fields[p].Hex = ""
+	}
+	if source := fieldIdxByCS(wireClass, csSplitSource); source >= 0 && source < len(fields) {
+		fields[source].Hex = ""
+	}
+	if sidx := fieldIdxByCS(wireClass, csSlotEnum); sidx >= 0 && fieldOpAt(wireClass, sidx) == "BYTE" {
+		fields[sidx].Num = ptrU64(0) // 背包
+	}
+}
+
 // returnToBackpack 将普通物品退回背包，并清空 rig_guid 和 wire 父引用。
 // 父引用不清空时，客户端会继续把物品视为已挂载。
 // 存储更新统一走 DetachReturnToBackpack，字段更新后再整体落库。
@@ -687,16 +702,7 @@ func (s *Server) returnToBackpack(ctx context.Context, row *store.Item) {
 	if err != nil {
 		return
 	}
-	if p := fieldIdxByCS(row.WireClass, csParent); p >= 0 && p < len(fields) &&
-		(fields[p].Op == "OPTGUID" || fields[p].Op == "GUID16") {
-		fields[p].Hex = ""
-	}
-	if source := fieldIdxByCS(row.WireClass, csSplitSource); source >= 0 && source < len(fields) {
-		fields[source].Hex = ""
-	}
-	if sidx := fieldIdxByCS(row.WireClass, csSlotEnum); sidx >= 0 && fieldOpAt(row.WireClass, sidx) == "BYTE" {
-		fields[sidx].Num = ptrU64(0) // 背包
-	}
+	clearRigFieldsForBackpack(fields, row.WireClass)
 	bumpCreatedTicks(fields, row.WireClass)
 	fj, jerr := FieldsToJSON(fields)
 	if jerr != nil {

@@ -27,17 +27,19 @@ const (
 	damageEventLostOnLineBreak = "lost_on_line_break"
 	damageEventRodBreak        = "rod_break"
 	damageEventReelOverload    = "reel_overload"
+	damageEventComponentBreak  = "component_break"
 	damageEventRepair          = "repair"
 )
 
 type gearBreakOutcome struct {
-	LineBroken   bool
-	ReelDamaged  bool
-	BreakPart    string // leader / line / reel / rod
-	LineLossM    int64
-	BrokenGUID   string
-	RemovedGUIDs []string
-	UpdatedTrees []*proto.Value
+	LineBroken      bool
+	ReelDamaged     bool
+	ComponentBroken bool
+	BreakPart       string // leader / line / reel / rod / component
+	LineLossM       int64
+	BrokenGUID      string
+	RemovedGUIDs    []string
+	UpdatedTrees    []*proto.Value
 }
 
 type gearBreakDecision struct {
@@ -62,6 +64,14 @@ var leaderBreakLossCategories = map[int64]bool{
 // sourceLineCategories 包含主线及前导/钢丝前导。断任何一项都按断线处理。
 var sourceLineCategories = map[int64]bool{
 	catLine: true, catLead: true, catLeaderLock: true, catWireLeader: true,
+}
+
+// terminalBreakCategories 是不承力的终端消耗件：钩、拟饵、饵、浮漂。
+// 这类件由客户端在打斗中直接上报断裂（如钩被牙磨断、拟饵挂底拉断），
+// 上报可以采信：采信终端件损坏没有作弊收益，误判成本也只是消耗件本身。
+// 承力件（线/前导/竿/轮）仍走 resolveGearBreak 的物理裁决。
+var terminalBreakCategories = map[int64]bool{
+	catHook: true, catLure: true, catBait: true, catFloat: true,
 }
 
 func ptrFloat64(v float64) *float64 { return &v }
@@ -139,13 +149,17 @@ func (s *Server) itemBrokenForMount(ctx context.Context, row *store.Item) bool {
 	return s.itemLength(ctx, row) <= 0
 }
 
-// breakLineOrRod 处理 17/9：客户端只负责报告“已经超载”，服务端重新比较
-// 竿、主线、子线的真实强度，决定断哪一件，不能直接相信客户端上报的断件。
+// breakLineOrRod 处理 17/9：客户端只负责报告“已经超载”，承力件（竿、主线、
+// 子线、轮）由服务端重新比较真实强度决定断哪一件，不能直接相信客户端上报的
+// 断件。终端件（钩/拟饵/饵/漂）不承力，客户端上报的断裂直接采信。
 func (s *Server) breakLineOrRod(ctx context.Context, uid int64, rodGUID, reportedGUID string) (*gearBreakOutcome, error) {
 	rodGUID = strings.TrimSpace(rodGUID)
 	reportedGUID = strings.TrimSpace(reportedGUID)
 	if rodGUID == "" || rodGUID == zeroGUID {
 		return nil, sql.ErrNoRows
+	}
+	if comp, ok := s.rigTerminalComponentOf(ctx, uid, rodGUID, reportedGUID); ok {
+		return s.breakComponentTx(ctx, uid, rodGUID, comp)
 	}
 	dec, err := s.resolveGearBreak(ctx, uid, rodGUID, reportedGUID)
 	if err != nil {
@@ -159,6 +173,137 @@ func (s *Server) breakLineOrRod(ctx context.Context, uid int64, rodGUID, reporte
 	default:
 		return s.breakRodTx(ctx, uid, rodGUID, dec.GUID)
 	}
+}
+
+// rigTerminalComponentOf 判断客户端上报的断件是否为已装在竿上的终端消耗件。
+// 只采信属于本人且确实挂在该钓组上的组件；随机 GUID 和承力件都返回 false，
+// 交回 resolveGearBreak 物理裁决。
+func (s *Server) rigTerminalComponentOf(ctx context.Context, uid int64, rodGUID, reportedGUID string) (*store.Item, bool) {
+	if reportedGUID == "" || reportedGUID == zeroGUID || reportedGUID == rodGUID {
+		return nil, false
+	}
+	row, err := s.DB.GetItemByGUID(ctx, reportedGUID)
+	if err != nil || row == nil || row.UID != uid {
+		return nil, false
+	}
+	def, err := s.itemDefForRow(ctx, row)
+	if err != nil || def == nil || !terminalBreakCategories[def.Category] {
+		return nil, false
+	}
+	// 确认组件确实装在该竿上（rig_component 投影或 f5 钓组存储任一命中即可）。
+	mounted := false
+	var n int
+	if err := s.DB.SQL.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM rig_component WHERE rig_guid=? AND guid=?`, rodGUID, reportedGUID,
+	).Scan(&n); err == nil && n > 0 {
+		mounted = true
+	}
+	if !mounted {
+		if rod, rerr := s.DB.GetItemByGUID(ctx, rodGUID); rerr == nil && rod != nil {
+			if fields, ferr := FieldsFromJSON(rod.FieldsJSON); ferr == nil {
+				stored := protoFieldAt(fields, rod.WireClass, csRigObject)
+				for _, comp := range rigCompsOf(stored) {
+					if comp.GUID == reportedGUID {
+						mounted = true
+						break
+					}
+				}
+			}
+		}
+	}
+	return row, mounted
+}
+
+// breakComponentTx 处理终端件断裂：组件耐久归零、从钓组摘除并退回背包
+// （物品保留，可经工坊修理后重新装配），竿本体与承力线不受影响。
+func (s *Server) breakComponentTx(ctx context.Context, uid int64, rodGUID string, comp *store.Item) (*gearBreakOutcome, error) {
+	tx, err := s.DB.SQL.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	rod, err := s.DB.GetItemByGUIDTx(ctx, tx, rodGUID)
+	if err != nil || rod == nil || rod.UID != uid {
+		return nil, sql.ErrNoRows
+	}
+	comp, err = s.DB.GetItemByGUIDTx(ctx, tx, comp.GUID)
+	if err != nil || comp == nil || comp.UID != uid {
+		return nil, sql.ErrNoRows
+	}
+	compFields, err := FieldsFromJSON(comp.FieldsJSON)
+	if err != nil {
+		return nil, err
+	}
+	before := comp.Durability
+	cIdx := fieldIdxByCS(comp.WireClass, csDurability)
+	if cIdx < 0 || !setWireFloat(compFields, comp.WireClass, cIdx, 0) {
+		return nil, errDurabilityField
+	}
+	comp.Durability = 0
+	comp.Container = "backpack"
+	comp.Slot = 0
+	comp.RigGUID = ""
+	clearRigFieldsForBackpack(compFields, comp.WireClass)
+	if err := updateItemFieldsTx(ctx, s.DB, tx, comp, compFields); err != nil {
+		return nil, err
+	}
+	// 投影可能先于 f5 存在；摘除投影不能依赖 f5 是否命中。
+	if _, err := tx.ExecContext(ctx, `DELETE FROM rig_component WHERE rig_guid=? AND guid=?`, rodGUID, comp.GUID); err != nil {
+		return nil, err
+	}
+
+	// 从 f5 钓组存储中摘除该组件。
+	rodFields, err := FieldsFromJSON(rod.FieldsJSON)
+	if err != nil {
+		return nil, err
+	}
+	stored := protoFieldAt(rodFields, rod.WireClass, csRigObject)
+	comps := rigCompsOf(stored)
+	detached := false
+	for key, c := range comps {
+		if c.GUID == comp.GUID {
+			delete(comps, key)
+			detached = true
+			break
+		}
+	}
+	if detached {
+		name, rigType, typeOK := rigIdentity(stored)
+		if !typeOK {
+			rigType = s.defaultRigTypeForRod(ctx, rod.ItemID)
+			name = rigNameForType(rigType)
+		}
+		depth := rigDepthOf(stored, defaultDepthFor(name, rigType))
+		if idx := fieldIdxByCS(rod.WireClass, csRigObject); idx >= 0 && idx < len(rodFields) {
+			rodFields[idx].Op = "VAL"
+			rodFields[idx].Val = buildRig153WithClip(name, rigType, comps, depth, rigClipOf(stored))
+		}
+		if err := updateItemFieldsTx(ctx, s.DB, tx, rod, rodFields); err != nil {
+			return nil, err
+		}
+	}
+	// 损坏组件退回背包（清空 rig_guid），与摘除同事务提交；否则组件滞留在
+	// rig 容器里，重登后既不在背包也不在钓组树。
+	if err := s.DB.DetachReturnToBackpackTx(ctx, tx, comp.GUID); err != nil {
+		return nil, err
+	}
+	entry := store.ItemDamageLog{
+		UID: uid, ItemGUID: comp.GUID, ItemID: comp.ItemID, Event: damageEventComponentBreak,
+		BeforeDurability: ptrFloat64(before), AfterDurability: ptrFloat64(0), BrokenGUID: comp.GUID,
+		DetailJSON: damageDetailJSON(map[string]any{"rod_guid": rodGUID}),
+	}
+	if err := store.AddItemDamageLog(ctx, tx, entry); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	out := &gearBreakOutcome{
+		ComponentBroken: true, BreakPart: "component", BrokenGUID: comp.GUID,
+		UpdatedTrees: s.loadUpdatedTrees(ctx, []string{rodGUID, comp.GUID}),
+	}
+	return out, nil
 }
 
 // resolveGearBreak 按真实装配决定超载对象。手竿比较竿/主线/子线；

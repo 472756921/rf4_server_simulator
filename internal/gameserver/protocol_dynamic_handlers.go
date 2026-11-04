@@ -136,7 +136,7 @@ func hDynamicRodBreak(ctx *Ctx) ([]byte, bool) {
 			st.CastActive = false
 			st.Hooked = false
 			st.Resolved = true
-			if !outcome.LineBroken && !outcome.ReelDamaged {
+			if !outcome.LineBroken && !outcome.ReelDamaged && !outcome.ComponentBroken {
 				st.GearGuid = ""
 			}
 			st.mu.Unlock()
@@ -145,6 +145,9 @@ func hDynamicRodBreak(ctx *Ctx) ([]byte, bool) {
 				srv.bumpFishingCounter(ctx.Sess.Userid, "escapes")
 			} else if outcome.LineBroken {
 				srv.bumpFishingCounter(ctx.Sess.Userid, "line_breaks")
+			} else if outcome.ComponentBroken {
+				// 钩/拟饵等终端件断裂：竿仍在手上，钓组摘除损坏件。
+				srv.bumpFishingCounter(ctx.Sess.Userid, "component_breaks")
 			} else {
 				srv.bumpFishingCounter(ctx.Sess.Userid, "rod_breaks")
 			}
@@ -158,6 +161,7 @@ func hDynamicRodBreak(ctx *Ctx) ([]byte, bool) {
 			}
 			ctx.Log.Info("17/9 渔具超载", "rod", shortGUID(rodGUID), "part", outcome.BreakPart,
 				"broken", shortGUID(outcome.BrokenGUID), "line", outcome.LineBroken,
+				"comp", outcome.ComponentBroken,
 				"line_loss_m", outcome.LineLossM, "removed", len(outcome.RemovedGUIDs))
 			return body, true
 		}
