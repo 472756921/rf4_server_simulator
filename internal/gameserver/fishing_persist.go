@@ -153,6 +153,7 @@ func rolledFishToStore(f *RolledFish) *store.FishingFish {
 		return nil
 	}
 	return &store.FishingFish{
+		HookGUID:   f.HookGUID,
 		BaitGUIDs:  f.BaitGUIDs,
 		BaitsKnown: f.BaitsKnown,
 		FishGUID:   f.FishGUID,
@@ -173,6 +174,7 @@ func rolledFishFromStore(f *store.FishingFish) *RolledFish {
 		return nil
 	}
 	return &RolledFish{
+		HookGUID:   f.HookGUID,
 		BaitGUIDs:  f.BaitGUIDs,
 		BaitsKnown: f.BaitsKnown,
 		FishGUID:   f.FishGUID,

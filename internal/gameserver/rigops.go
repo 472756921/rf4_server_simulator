@@ -919,6 +919,7 @@ func (s *Server) handitemLoadedGuid(ctx context.Context, parentGUID string) stri
 
 // rigSetOpts 保存装配操作的选项。
 type rigSetOpts struct {
+	KeepRebait        bool // 自动补挂成功后由调用方删除原请求。
 	ParentType        int  // 命令族号（13/15/16/17），不是钓组种类
 	EnforceCategory   bool // 显式槽位 ≠ 物品品类时用 fits_slot 校验（17/3/单测路径）
 	SplitStack        bool // 计件物品挂载拆分（钓竿必须拆分；手持工具例外）
@@ -1015,6 +1016,10 @@ func (s *Server) rigSetComponent(ctx context.Context, uid int64, parentGUID stri
 
 	// 同品类多槽时由实例 f5 选择空闲序号；只有目标序号已占用时才替换现有组件。
 	ordinal, oldGUID := s.rigSetTarget(ctx, parentGUID, slot, itemGUID, extra)
+	oldHook := ""
+	if slot == catBait || slot == catLure {
+		oldHook, _ = s.DB.GetRodSetting(ctx, parentGUID, "bait_hook:"+oldGUID)
+	}
 	if oldGUID != "" && oldGUID != itemGUID {
 		if prev, oerr := s.DB.GetItemByGUID(ctx, oldGUID); oerr == nil && prev != nil {
 			if s.refundableSplitChild(ctx, prev) {
@@ -1055,8 +1060,14 @@ func (s *Server) rigSetComponent(ctx context.Context, uid int64, parentGUID stri
 	// 顺序反过来会导致拆卸只删索引，实例中仍保留组件。
 	s.rigComponentWriteAt(ctx, parentGUID, slot, ordinal, itemGUID, extra)
 	_ = s.DB.SetItemRigLink(ctx, itemGUID, parentGUID, slot)
-	if slot == 27 {
+	if slot == 27 && !opts.KeepRebait {
 		_, _ = s.DB.SQL.ExecContext(ctx, `DELETE FROM rod_setting WHERE guid=? AND key=?`, parentGUID, fmt.Sprintf("rebait:%d", ordinal))
+	}
+
+	if slot == catBait || slot == catLure {
+		if err := s.rememberMountedBaitHook(ctx, parentGUID, itemGUID, oldHook, slot, ordinal); err != nil {
+			s.log.Warn("钩饵关联保存失败", "err", err)
+		}
 	}
 
 	// 手持工具将装填物 GUID 写入父实例 f1。
