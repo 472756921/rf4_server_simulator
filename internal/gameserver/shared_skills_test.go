@@ -283,9 +283,14 @@ func TestSharedSkillEffectsCountOneGroup(t *testing.T) {
 	if err := srv.DB.SetSkillNode(ctx, sharedSkillUID, 501, 2); err != nil {
 		t.Fatal(err)
 	}
+	spent, err := srv.DB.SkillNodeLevelSum(ctx, sharedSkillUID)
+	if err != nil || spent != 2 {
+		t.Fatalf("shared group points=%d err=%v, want 2", spent, err)
+	}
+	// 节点效果含义尚未确认，合成技能只使用熟练度，不重复叠加节点通用效果。
 	_, mastery, effect := srv.castSkillStats(ctx, sharedSkillUID, 1)
 	bonus := srv.fishingBonus(ctx, sharedSkillUID, 1)
-	if mastery != 0 || effect != 2 || bonus.BiteSpeed != 1.0-2.0/10.0*0.03 {
-		t.Fatalf("shared skill applied twice: mastery=%v effect=%v bonus=%+v", mastery, effect, bonus)
+	if mastery != 0 || effect != 0 || bonus != neutralFishingSkillBonus() {
+		t.Fatalf("shared skill gained an unconfirmed generic effect: mastery=%v effect=%v bonus=%+v", mastery, effect, bonus)
 	}
 }

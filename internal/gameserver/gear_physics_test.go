@@ -291,14 +291,14 @@ func TestFishingBonusUsesActualRigSkillCategory(t *testing.T) {
 	srv := NewServerForGearTest(t, db)
 
 	bottom := srv.fishingBonus(ctx, uid, 12)
-	// effect = 10 * 0.15 + 2 * 1.0 = 3.5
-	if math.Abs(bottom.BiteSpeed-(1.0-3.5/10.0*0.03)) > 1e-9 {
+	// 未确认节点不叠加通用效果，effect = 10 * 0.15 = 1.5
+	if math.Abs(bottom.BiteSpeed-(1.0-1.5/10.0*0.03)) > 1e-9 {
 		t.Fatalf("bottom bite_speed=%f", bottom.BiteSpeed)
 	}
-	if math.Abs(bottom.TrophyLuck-(3.5/10.0*0.012)) > 1e-9 {
+	if math.Abs(bottom.TrophyLuck-(1.5/10.0*0.012)) > 1e-9 {
 		t.Fatalf("bottom trophy_luck=%f", bottom.TrophyLuck)
 	}
-	if math.Abs(bottom.FightTolerance-(3.5/10.0*0.06)) > 1e-9 {
+	if math.Abs(bottom.FightTolerance-(1.5/10.0*0.06)) > 1e-9 {
 		t.Fatalf("bottom fight_tolerance=%f", bottom.FightTolerance)
 	}
 	if lure := srv.fishingBonus(ctx, uid, 5); lure != neutralFishingSkillBonus() {
