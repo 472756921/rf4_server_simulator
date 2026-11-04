@@ -147,6 +147,9 @@ func (s *Server) castSkillStats(ctx context.Context, uid, rigType int64) (catego
 	nodes, _ := s.DB.ListSkillNodes(ctx, uid)
 	mastery = clampFloat(points[category], 0, profCap)
 	for _, def := range s.skillDefsOfCat(category) {
+		if store.SharedSkillNodeIDs(category, def.NodeID)[0] != def.NodeID {
+			continue
+		}
 		if level := nodes[def.NodeID]; level > 0 {
 			nodeEffect += float64(level) * skillNodeEffectPoints(def)
 		}

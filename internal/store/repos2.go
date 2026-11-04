@@ -61,7 +61,7 @@ func (d *DB) ListSkillNodes(ctx context.Context, uid int64) (map[int64]int64, er
 		}
 		out[n] = lv
 	}
-	return out, rows.Err()
+	return ProjectSharedSkillNodes(out), rows.Err()
 }
 
 // ---- 快捷栏 container_slot ----
