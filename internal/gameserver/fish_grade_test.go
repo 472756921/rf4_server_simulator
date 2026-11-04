@@ -39,7 +39,7 @@ func TestFishGradeRulerBoundariesAndWire(t *testing.T) {
 					t.Fatalf("27 grade=%d want=%d", got, want)
 				}
 				for _, obj := range []*proto.Value{
-					s.build813(ctx, 1000001, f, 0, 0),
+					s.build813(ctx, 1000001, f, 0, 0, 0),
 					s.buildSettle813(ctx, 1000001, f, &settleXpResult{}),
 				} {
 					for j, threshold := range tc.lines {
