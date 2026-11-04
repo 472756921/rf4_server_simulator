@@ -117,31 +117,18 @@ func (s *Server) awardSkillProficiencyWithRolls(ctx context.Context, uid, cat in
 	return gain
 }
 
-// skillNodeEffectPoints 将每级效果百分比换算为效果点。
-// 每 5% 计 1 点；effect_pct 未配置时使用默认值 1.0。
-func skillNodeEffectPoints(def skillNodeDef) float64 {
-	if def.EffectPct > 0 {
-		return float64(def.EffectPct) / 5.0
-	}
-	return 1.0
-}
-
-// fishingBonus 汇总玩家在指定钓组大类上的效果。熟练度每 1% -> 0.15 效果点，
-// 节点每级按 skillNodeEffectPoints 累加。
-func (s *Server) fishingBonus(ctx context.Context, uid, rigType int64) fishingSkillBonus {
+// fishingBonus 按当前钓法合成永久与当前竿熟练度，不给未知节点补通用加成。
+func (s *Server) fishingBonus(ctx context.Context, uid, rigType int64, gears ...string) fishingSkillBonus {
 	b := neutralFishingSkillBonus()
 	if s == nil || s.DB == nil {
 		return b
 	}
 	cat := fishingSkillCatForRig(rigType)
-	points, _ := s.DB.ListSkills(ctx, uid)
-	nodes, _ := s.DB.ListSkillNodes(ctx, uid)
-	effect := points[cat] * 0.15
-	for _, def := range s.skillDefsOfCat(cat) {
-		if lv := nodes[def.NodeID]; lv > 0 {
-			effect += float64(lv) * skillNodeEffectPoints(def)
-		}
+	effects, err := s.effectiveFishingSkills(ctx, uid, gears...)
+	if err != nil {
+		return b
 	}
+	effect := effects.mastery(cat) * 0.15
 	b.BiteSpeed = 1.0 - effect/10.0*0.03
 	if b.BiteSpeed < 0.5 {
 		b.BiteSpeed = 0.5
@@ -299,8 +286,11 @@ func (s *Server) skillLearn(ctx context.Context, uid, catID, nodeID int64) (bool
 	if cur >= def.MaxLevel {
 		return false, "max-level"
 	}
-	prof, _ := s.DB.GetSkillPoints(ctx, uid, catID)
-	if prof+1e-6 < float64(def.UnlockPct) {
+	effects, err := s.effectiveFishingSkills(ctx, uid)
+	if err != nil {
+		return false, "db-error"
+	}
+	if !nodeUnlocked(skillNodeDef{UnlockPct: float32(def.UnlockPct), Enabled: def.Enabled != 0}, effects.Mastery[catID], effects.GearMastery[catID]) {
 		return false, "locked"
 	}
 	if s.skillAvailablePoints(ctx, uid) <= 0 {

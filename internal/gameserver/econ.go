@@ -211,27 +211,8 @@ func stLastSkill(s *Server, uid int64) int64 {
 
 // buildSingleSkill312 单大类 312（801.f6 用）。
 func (s *Server) buildSingleSkill312(ctx context.Context, uid, catID int64) *proto.Value {
-	points, _ := s.DB.ListSkills(ctx, uid)
-	nodes, _ := s.DB.ListSkillNodes(ctx, uid)
-	catNodes := proto.Args(proto.S("122"))
-	for _, nd := range s.skillDefsOfCat(catID) {
-		catNodes.Items = append(catNodes.Items,
-			wiregen.MustMakeObj("bmdafhbpfci", map[int]*proto.Value{
-				0: proto.U32(uint32(nd.NodeID)),
-				1: proto.U32(f32bitsOf(nd.UnlockPct)),
-				2: proto.U32(uint32(nd.MaxLevel)),
-				3: proto.U32(uint32(nodes[nd.NodeID])),
-				4: proto.U32(f32bitsOf(nd.EffectPct)),
-				5: proto.U32(uint32(nd.GroupID)),
-				6: proto.U32(boolU32(nodeUnlocked(nd, points[catID], 0))),
-			}))
-	}
-	return wiregen.MustMakeObj("kmepameiibi", map[int]*proto.Value{
-		0: proto.U32(uint32(catID)),
-		1: proto.F32(float32(points[catID])),
-		2: proto.F32(0.0),
-		3: catNodes,
-	})
+	effects, _ := s.effectiveFishingSkills(ctx, uid)
+	return s.skillCategory312(catID, effects)
 }
 
 // build5003 5012 赛季块（801.f3）。

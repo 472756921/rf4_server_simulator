@@ -179,7 +179,7 @@ func hexOf(vals []*proto.Value) []string {
 // skillCatOrder 是技能树大类的显示顺序。
 var skillCatOrder = []int64{1, 2, 3, 10, 11, 4, 5, 6, 7, 8, 9}
 
-// profCap 熟练度合成上限。
+// profCap 永久熟练度上限。
 const profCap = 100.0
 
 // nodeUnlocked 计算技能节点在 313.f6 中的解锁状态。
@@ -189,8 +189,8 @@ func nodeUnlocked(nd skillNodeDef, prof, gear float64) bool {
 		return true
 	}
 	total := gear + prof
-	if total > profCap {
-		total = profCap
+	if total > effectiveSkillCap {
+		total = effectiveSkillCap
 	}
 	return total+1e-6 >= float64(nd.UnlockPct)
 }
@@ -201,8 +201,11 @@ func (s *Server) BuildSkillTree311(ctx context.Context, uid int64, availablePoin
 	if err != nil {
 		return nil, err
 	}
-	points, _ := s.DB.ListSkills(ctx, uid)
-	nodes, _ := s.DB.ListSkillNodes(ctx, uid)
+	effects, err := s.effectiveFishingSkills(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	nodes := effects.Learned
 
 	total := skillPointsTotal(p.Level) + s.skillBonusPoints(ctx, uid)
 	var used int64
@@ -219,28 +222,7 @@ func (s *Server) BuildSkillTree311(ctx context.Context, uid int64, availablePoin
 
 	cats := proto.Args(proto.S("121"))
 	for _, catID := range skillCatOrder {
-		mastery := float32(points[catID]) // f32 位由 F32 承载
-		prof := points[catID]
-		catNodes := proto.Args(proto.S("122"))
-		for _, nd := range s.skillDefsOfCat(catID) {
-			catNodes.Items = append(catNodes.Items,
-				wiregen.MustMakeObj("bmdafhbpfci", map[int]*proto.Value{
-					0: proto.U32(uint32(nd.NodeID)),
-					1: proto.U32(f32bitsOf(nd.UnlockPct)),
-					2: proto.U32(uint32(nd.MaxLevel)),
-					3: proto.U32(uint32(nodes[nd.NodeID])),
-					4: proto.U32(f32bitsOf(nd.EffectPct)),
-					5: proto.U32(uint32(nd.GroupID)),
-					6: proto.U32(boolU32(nodeUnlocked(nd, prof, 0))),
-				}))
-		}
-		cats.Items = append(cats.Items,
-			wiregen.MustMakeObj("kmepameiibi", map[int]*proto.Value{
-				0: proto.U32(uint32(catID)),
-				1: proto.F32(mastery),
-				2: proto.F32(0.0),
-				3: catNodes,
-			}))
+		cats.Items = append(cats.Items, s.skillCategory312(catID, effects))
 	}
 	return wiregen.MakeObj("djndmghegld", map[int]*proto.Value{
 		0: proto.U32(uint32(avail)),
