@@ -1666,7 +1666,7 @@ func (s *Server) rodRigSetClip(ctx context.Context, rodGUID string, clipM int64)
 	}
 	depth := rigDepthOf(stored, defaultDepthFor(name, curType))
 	fields[idx].Op = "VAL"
-	fields[idx].Val = buildRig153WithClip(name, curType, comps, depth, clipM)
+	fields[idx].Val = buildRig153Like(stored, name, curType, comps, depth, clipM)
 	s.saveItemFields(ctx, row, fields)
 	return true
 }
@@ -1729,7 +1729,7 @@ func (s *Server) rodRigSetDepth(ctx context.Context, rodGUID string, depthCM int
 		}
 	}
 	fields[idx].Op = "VAL"
-	fields[idx].Val = buildRig153WithClip(name, curType, comps, depthCM, rigClipOf(stored))
+	fields[idx].Val = buildRig153Like(stored, name, curType, comps, depthCM, rigClipOf(stored))
 	s.saveItemFields(ctx, row, fields)
 	return true
 }

@@ -505,7 +505,7 @@ func removeConsumedRigReferenceTx(ctx context.Context, db *store.DB, tx *sql.Tx,
 	}
 	delete(comps, key)
 	name, rt, _ := rigIdentity(f5)
-	fields[idx].Val = buildRig153WithClip(name, rt, comps, rigDepthOf(f5, 100), rigClipOf(f5))
+	fields[idx].Val = buildRig153Like(f5, name, rt, comps, rigDepthOf(f5, 100), rigClipOf(f5))
 	return updateItemFieldsTx(ctx, db, tx, parent, fields)
 }
 
@@ -751,7 +751,7 @@ func (s *Server) orderBaitsByHook(ctx context.Context, uid int64, rod string) er
 	}
 	f5 := fields[idx].Val
 	name, rt, _ := rigIdentity(f5)
-	fields[idx].Val = buildRig153WithClip(name, rt, comps, rigDepthOf(f5, 100), rigClipOf(f5))
+	fields[idx].Val = buildRig153Like(f5, name, rt, comps, rigDepthOf(f5, 100), rigClipOf(f5))
 	if err := updateItemFieldsTx(ctx, s.DB, tx, parent, fields); err != nil {
 		return err
 	}
