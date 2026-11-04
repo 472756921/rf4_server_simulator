@@ -72,6 +72,13 @@ var rigTypeLureFamily = map[int64]bool{
 	19: true, 20: true, 22: true,
 }
 
+// floatBaitRigTypes 浮钓族钓组：钩饵整包装填的适用范围。浮钓族单钩配饵，
+// 挂载背包里的一整包饵（qty>1），咬口逐份扣减，避免每中一条鱼就要手动重挂。
+// 沉底族（bottomRigTypes）多钩按钩逐份配饵、路亚族假饵非计件，均不走整包。
+var floatBaitRigTypes = map[int64]bool{
+	1: true, 2: true, 3: true, 4: true, 21: true, 30: true, 31: true,
+}
+
 // defaultRigTypeForRod 按竿型选择第一个有资源名映射的允许钓组。
 func (s *Server) defaultRigTypeForRod(ctx context.Context, rodItemID string) int64 {
 	def, err := s.DB.GetItemDefByItemID(ctx, rodItemID)
