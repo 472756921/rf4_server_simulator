@@ -498,6 +498,24 @@ func TestHookBreakDetachesComponentKeepsRod(t *testing.T) {
 	if freshHook.Durability != 0 {
 		t.Fatalf("断钩耐久应归零: %v", freshHook.Durability)
 	}
+	if freshHook.Container != "backpack" || freshHook.RigGUID != "" {
+		t.Fatalf("损坏组件应退回背包: container=%q rig_guid=%q", freshHook.Container, freshHook.RigGUID)
+	}
+	// 等价重登后重建容器：按背包容器查询仍能读到该组件。
+	bagRows, err := srv.DB.ListItemsByContainer(ctx, uid, "backpack")
+	if err != nil {
+		t.Fatal(err)
+	}
+	backInBag := false
+	for _, row := range bagRows {
+		if row.GUID == hook.GUID {
+			backInBag = true
+			break
+		}
+	}
+	if !backInBag {
+		t.Fatal("重建背包容器后应能查询到损坏组件")
+	}
 	if mustItem(t, db, line.GUID) == nil {
 		t.Fatal("钩断不应影响鱼线")
 	}

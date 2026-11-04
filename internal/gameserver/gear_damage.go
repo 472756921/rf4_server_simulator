@@ -214,8 +214,8 @@ func (s *Server) rigTerminalComponentOf(ctx context.Context, uid int64, rodGUID,
 	return row, mounted
 }
 
-// breakComponentTx 处理终端件断裂：组件耐久归零并从钓组摘除，竿本体与
-// 承力线不受影响。组件物品保留（耐久 0），可经工坊修理后重新装配。
+// breakComponentTx 处理终端件断裂：组件耐久归零、从钓组摘除并退回背包
+// （物品保留，可经工坊修理后重新装配），竿本体与承力线不受影响。
 func (s *Server) breakComponentTx(ctx context.Context, uid int64, rodGUID string, comp *store.Item) (*gearBreakOutcome, error) {
 	tx, err := s.DB.SQL.BeginTx(ctx, nil)
 	if err != nil {
@@ -278,6 +278,13 @@ func (s *Server) breakComponentTx(ctx context.Context, uid int64, rodGUID string
 			return nil, err
 		}
 	}
+	// 损坏组件退回背包（清空 rig_guid），与摘除同事务提交；否则组件滞留在
+	// rig 容器里，重登后既不在背包也不在钓组树。
+	if err := s.DB.DetachReturnToBackpackTx(ctx, tx, comp.GUID); err != nil {
+		return nil, err
+	}
+	comp.Container = "backpack"
+	comp.RigGUID = ""
 	entry := store.ItemDamageLog{
 		UID: uid, ItemGUID: comp.GUID, ItemID: comp.ItemID, Event: damageEventComponentBreak,
 		BeforeDurability: ptrFloat64(before), AfterDurability: ptrFloat64(0), BrokenGUID: comp.GUID,
