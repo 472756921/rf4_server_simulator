@@ -963,6 +963,15 @@ func (s *Server) rigSetComponent(ctx context.Context, uid int64, parentGUID stri
 		res.Rejected = true
 		return res
 	}
+	// 断竿不能继续装配：竿耐久归零后须先修理，再重组线组。
+	if prow, perr := s.DB.GetItemByGUID(ctx, parentGUID); perr == nil && prow != nil {
+		if pcat, _ := s.itemCategoryOf(ctx, prow); pcat == gearCatRod && prow.Durability <= 0 {
+			s.log.Warn("装配被拒：父竿已损坏", "parent", shortGUID(parentGUID),
+				"durability", prow.Durability)
+			res.Rejected = true
+			return res
+		}
+	}
 	if slot <= 0 && hasCat {
 		slot = itemCat // 槽位 = 物品品类（17/2 请求无槽位，见模块头注）
 	}

@@ -25,6 +25,7 @@ const (
 	damageEventLineBreak       = "line_break"
 	damageEventLineExhausted   = "line_exhausted"
 	damageEventLostOnLineBreak = "lost_on_line_break"
+	damageEventLostOnRodBreak  = "lost_on_rod_break"
 	damageEventRodBreak        = "rod_break"
 	damageEventReelOverload    = "reel_overload"
 	damageEventComponentBreak  = "component_break"
@@ -748,6 +749,77 @@ func (s *Server) breakRodTx(ctx context.Context, uid int64, rodGUID, brokenGUID 
 	if err := updateItemFieldsTx(ctx, s.DB, tx, rod, fields); err != nil {
 		return nil, err
 	}
+
+	// 官方断竿表现：整组钓组随竿报废（线组消失、竿折、战斗结束）。
+	// 删除全部已装组件与主线，进 11028 的移除列表让客户端清掉 UI 状态；
+	// 竿本体保留（耐久 0）可修理。缺少移除列表时客户端不清线组、鱼仍挂
+	// 钩，整轮卡死在搏鱼状态，只能换竿逃生。
+	var removed []string
+	stored := protoFieldAt(fields, rod.WireClass, csRigObject)
+	compGUIDs := map[string]bool{}
+	if rows, qerr := tx.QueryContext(ctx,
+		`SELECT COALESCE(guid,'') FROM rig_component WHERE rig_guid=?`, rodGUID); qerr == nil {
+		for rows.Next() {
+			var g string
+			if err := rows.Scan(&g); err == nil && g != "" {
+				compGUIDs[g] = true
+			}
+		}
+		_ = rows.Err()
+		_ = rows.Close()
+	}
+	for _, c := range rigCompsOf(stored) {
+		if c.GUID != "" {
+			compGUIDs[c.GUID] = true
+		}
+	}
+	if lineGUID, lerr := s.storedRigItemGUID(ctx, rod, csLine); lerr == nil && lineGUID != "" {
+		compGUIDs[lineGUID] = true
+	}
+	for g := range compGUIDs {
+		row, gerr := s.DB.GetItemByGUIDTx(ctx, tx, g)
+		if gerr != nil || row == nil {
+			continue
+		}
+		if err := s.DB.DeleteItemCascadeTx(ctx, tx, g); err != nil {
+			return nil, err
+		}
+		removed = append(removed, g)
+		lostLog := store.ItemDamageLog{
+			UID: uid, ItemGUID: g, ItemID: row.ItemID, Event: damageEventLostOnRodBreak,
+			BeforeDurability: ptrFloat64(row.Durability), BrokenGUID: brokenGUID,
+			DetailJSON: damageDetailJSON(map[string]any{"rod_guid": rodGUID, "reason": "rod_break"}),
+		}
+		if err := store.AddItemDamageLog(ctx, tx, lostLog); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM rig_component WHERE rig_guid=?`, rodGUID); err != nil {
+		return nil, err
+	}
+	// 清空竿上的钓组存储与主线引用。
+	comps := rigCompsOf(stored)
+	for k := range comps {
+		delete(comps, k)
+	}
+	name, rigType, typeOK := rigIdentity(stored)
+	if !typeOK {
+		rigType = s.defaultRigTypeForRod(ctx, rod.ItemID)
+		name = rigNameForType(rigType)
+	}
+	depth := rigDepthOf(stored, defaultDepthFor(name, rigType))
+	if i := fieldIdxByCS(rod.WireClass, csRigObject); i >= 0 && i < len(fields) {
+		fields[i].Op = "VAL"
+		fields[i].Val = buildRig153WithClip(name, rigType, comps, depth, rigClipOf(stored))
+	}
+	if i := fieldIdxByCS(rod.WireClass, csLine); i >= 0 && i < len(fields) {
+		fields[i].Op = "OPTGUID"
+		fields[i].Hex = ""
+	}
+	if err := updateItemFieldsTx(ctx, s.DB, tx, rod, fields); err != nil {
+		return nil, err
+	}
+
 	entry := store.ItemDamageLog{
 		UID: uid, ItemGUID: rod.GUID, ItemID: rod.ItemID, Event: damageEventRodBreak,
 		BeforeDurability: ptrFloat64(before), AfterDurability: ptrFloat64(0), BrokenGUID: brokenGUID,
@@ -760,7 +832,7 @@ func (s *Server) breakRodTx(ctx context.Context, uid int64, rodGUID, brokenGUID 
 		return nil, err
 	}
 	return &gearBreakOutcome{
-		LineBroken: false, BreakPart: "rod", BrokenGUID: brokenGUID,
+		LineBroken: false, BreakPart: "rod", BrokenGUID: brokenGUID, RemovedGUIDs: removed,
 		UpdatedTrees: s.loadUpdatedTrees(ctx, []string{rodGUID}),
 	}, nil
 }

@@ -155,6 +155,8 @@ func hDynamicRodBreak(ctx *Ctx) ([]byte, bool) {
 				"broken", shortGUID(outcome.BrokenGUID), "line", outcome.LineBroken,
 				"comp", outcome.ComponentBroken,
 				"line_loss_m", outcome.LineLossM, "removed", len(outcome.RemovedGUIDs))
+			// 断件会改变竿耐久和装配状态，全量同步强制刷新客户端物品模型。
+			ctx.Sess.Push4_22Full()
 			// 断件必丢鱼：11028 只表达装备损坏，另经聊天频道提示跑鱼。
 			reason := "断竿"
 			switch {
