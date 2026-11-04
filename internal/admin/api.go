@@ -237,7 +237,7 @@ func (s *Server) handleTunableSet(w http.ResponseWriter, r *http.Request) {
 		httpError(w, 400, "参数错误")
 		return
 	}
-	if (req.Key == "fish_bait_rules_enabled" || req.Key == "fish_distribution_enabled" || req.Key == "fish_weather_enabled") && req.Value != "0" && req.Value != "1" {
+	if (req.Key == "fish_bait_rules_enabled" || req.Key == "fish_distribution_enabled" || req.Key == "fish_weather_enabled" || req.Key == "happy_hour_enabled") && req.Value != "0" && req.Value != "1" {
 		httpError(w, 400, "鱼群开关只能为 0 或 1")
 		return
 	}
@@ -324,6 +324,7 @@ func (s *Server) handlePlayerDetail(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	skillTotal, skillSpent, skillBonus, skillAvail := s.db.SkillPointsAvailable(ctx, uid)
+	happy, _ := s.db.GetHappyHourStatus(ctx, uid, time.Now())
 	writeJSON(w, map[string]any{
 		"uid": p.UID, "name": p.Name, "level": p.Level, "xp": p.XP,
 		"silver": p.Silver, "gold": p.Gold, "bank": p.Bank,
@@ -335,6 +336,7 @@ func (s *Server) handlePlayerDetail(w http.ResponseWriter, r *http.Request) {
 		"items": items, "keepnet": keepnet, "mails": mailRows, "skills": skills,
 		"skill_total": skillTotal, "skill_spent": skillSpent,
 		"skill_bonus": skillBonus, "available_points": skillAvail,
+		"happy_hour": happy,
 	})
 }
 

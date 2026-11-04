@@ -135,6 +135,13 @@ func (s *Server) settleCatchOnce(ctx context.Context, uid int64, f *RolledFish, 
 	state := s.stateFor(uid)
 	state.mu.Lock()
 	gear := state.GearGuid
+	if !f.HappyHourKnown {
+		if sess := s.liveSessionByUID(uid); sess != nil {
+			f.HappyHour = sess.currentHappyHour().Active
+		}
+		f.HappyHourKnown = true
+	}
+	happy := f.HappyHour
 	state.mu.Unlock()
 	bonuses, err := s.rodXPBonuses(ctx, uid, gear, xp)
 	if err != nil {
@@ -143,6 +150,12 @@ func (s *Server) settleCatchOnce(ctx context.Context, uid int64, f *RolledFish, 
 	wear, err := s.prepareCatchWear(ctx, uid, gear)
 	if err != nil {
 		return nil, err
+	}
+	if sess := s.liveSessionByUID(uid); sess != nil {
+		sess.updateHappyHour(time.Now(), false)
+	}
+	if happy {
+		bonuses = append(bonuses, catchXPBonus{Kind: 56, GUID: zeroGUID, Multiplier: .5, XP: int64(math.Round(float64(xp) * .5))})
 	}
 	tx, err := s.DB.SQL.BeginTx(ctx, nil)
 	if err != nil {
@@ -199,7 +212,7 @@ func (s *Server) settleCatchOnce(ctx context.Context, uid int64, f *RolledFish, 
 	if err := tx.QueryRowContext(ctx, `SELECT MIN(points,100.0) FROM skill WHERE uid=? AND skill_id=?`, uid, r.SkillID).Scan(&oldSkill); err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
-	gain := math.Min(fishingProficiencyGainForRoll(oldSkill, rand.Float64(), rand.Float64()), math.Max(0, profCap-oldSkill))
+	gain := math.Min(fishingProficiencyGainForRoll(oldSkill, happyHourProficiencyRoll(oldSkill, rand.Float64(), happy), rand.Float64()), math.Max(0, profCap-oldSkill))
 	r.SkillGain = &gain
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(weight_g),0) FROM catch_log WHERE uid=? AND fish_key=?`, uid, f.Species).Scan(&r.PreviousBest); err != nil {
 		return nil, err
