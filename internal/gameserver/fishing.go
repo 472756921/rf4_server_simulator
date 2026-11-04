@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"slices"
 	"strings"
 	"time"
 
@@ -46,6 +47,9 @@ type FishState struct {
 	PosX         float64 // 3/9 位置同步：世界坐标 X
 	PosZ         float64 // 3/9 位置同步：世界坐标 Z
 	HasPos       bool
+	CastPosX     float64 // 14/2 实际抛竿落点 X
+	CastPosZ     float64 // 14/2 实际抛竿落点 Z
+	HasCastPos   bool
 	LastSkill    int64       // 本次钓鱼大类（1 浮钓 / 2 纺车 / 3 底钓 / 11 海钓）
 	Armed        *RolledFish // GM 武装"下一杆必上"（唯一绕过重量上限的路径）
 	Bonus        fishingSkillBonus
@@ -436,6 +440,7 @@ func (s *Server) rollFishFromDB(loc, bait string) *RolledFish {
 func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bonus fishingSkillBonus, contexts ...fishRollContext) *RolledFish {
 	c := rollContext(contexts)
 	strict := s.tunableF("fish_bait_rules_enabled", 0) == 1
+	distribution := s.tunableF("fish_distribution_enabled", 0) == 1
 	cctx := s.dbCtx()
 	statLoc := s.DB.ResolveStatLoc(cctx, loc)
 	if statLoc == "" {
@@ -477,7 +482,7 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 				wts[i] = ov.Weight
 				hasPositive = true
 			}
-			if !hasPositive && !strict {
+			if !hasPositive && !strict && !distribution {
 				copy(wts, base)
 				keys = keys[:len(roster)]
 				wts = wts[:len(roster)]
@@ -499,6 +504,12 @@ func (s *Server) rollFishFromDBWithRules(loc, bait string, gearCapKg float64, bo
 		}
 		for i, key := range keys {
 			interests[key] = math.Min(1, wts[i]/base[key]/maxBaitPreference)
+		}
+	}
+	if distribution {
+		applyFishDistribution(statLoc, keys, wts, c)
+		if !slices.ContainsFunc(wts, func(w float64) bool { return w > 0 }) {
+			return nil
 		}
 	}
 	// companion 周纪录饵效（config bait_pref_scale / bait_pref_weight_shift；
@@ -717,6 +728,9 @@ func (s *Server) rollFishPoolsWithRules(loc string, gearCapKg float64, bonus fis
 	pool := fishPools[loc]
 	if len(pool) == 0 {
 		pool = defaultFishPool
+	}
+	if s.tunableF("fish_distribution_enabled", 0) == 1 {
+		return nil
 	}
 	e := pool[rand.Intn(len(pool))]
 	interest := 0.0
@@ -1234,7 +1248,11 @@ func (s *Server) onBiteTimer(uid int64, gen uint64) {
 		st.mu.Unlock()
 		return
 	}
-	f := s.rollFishForRig(s.dbCtx(), uid, st.GearGuid, st.Loc, st.Bait, st.Bonus)
+	x, z, hasPos := st.CastPosX, st.CastPosZ, st.HasCastPos
+	if !hasPos {
+		x, z, hasPos = st.PosX, st.PosZ, st.HasPos
+	}
+	f := s.rollFishForRig(s.dbCtx(), uid, st.GearGuid, st.Loc, st.Bait, st.Bonus, fishRollContext{x: x, z: z, hasPos: hasPos, spot: st.Spot, now: now})
 	if f == nil {
 		st.PushSent = false
 		st.Pending = nil
