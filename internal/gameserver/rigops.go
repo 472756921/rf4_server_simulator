@@ -192,7 +192,7 @@ var canonicalRigIndex = func() map[int64]int64 {
 
 // slotIndicesFor 返回指定钓组类型和品类对应的规范索引列表。
 func slotIndicesFor(rigType, category int64) []int64 {
-	if category == 27 && rigType != 0 {
+	if category == 27 && rigType != 0 && len(slotIndicesFor(rigType, catHook)) <= 1 {
 		return []int64{350, 351}
 	}
 	tpl := rigSlotTemplates[rigType]
@@ -234,7 +234,7 @@ func canonicalIndex(category, clientIndex int64, rigType int64) int64 {
 // 合法客户端索引优先，否则使用模板中对应序号的槽。
 func canonicalIndexForOrdinal(category, clientIndex, rigType, ordinal int64) int64 {
 	if category == 27 {
-		if ordinal == 1 {
+		if ordinal == 1 && len(slotIndicesFor(rigType, catHook)) <= 1 {
 			return 351
 		}
 		return 350
@@ -285,6 +285,8 @@ func rigCompsOf(f5 *proto.Value) map[int64]rigComp {
 	if comps == nil {
 		return out
 	}
+	_, rigType, _ := rigIdentity(f5)
+	singleHook := len(slotIndicesFor(rigType, catHook)) <= 1
 	counts := map[int64]int64{}
 	for _, it := range comps.Items {
 		if it == nil || it.Kind != proto.KindObj {
@@ -297,7 +299,7 @@ func rigCompsOf(f5 *proto.Value) map[int64]rigComp {
 		}
 		cat := int64(f0.U32())
 		ordinal := counts[cat]
-		if cat == 27 {
+		if cat == 27 && singleHook {
 			switch f2.U32() {
 			case 351:
 				ordinal = 1
@@ -1140,8 +1142,8 @@ func (s *Server) rigSetTarget(ctx context.Context, parentGUID string, slot int64
 	// 天然饵只有显式第二饵位才组成双饵；普通换饵仍替换第一饵。
 	if slot == 27 {
 		ordinal := int64(0)
-		if extra == 351 {
-			ordinal = 1
+		if slotCount := int64(baitSlotCount(s.rigTypeForWrite(ctx, parentGUID))); extra > 350 && extra < 350+slotCount {
+			ordinal = extra - 350
 		}
 		return ordinal, comps[rigCompKey(slot, ordinal)].GUID
 	}
@@ -1526,7 +1528,7 @@ func (s *Server) rigDetachAt(ctx context.Context, parentGUID string, slot, ordin
 
 // rigRemoveAll 拆下父对象上的全部组件。
 func (s *Server) rigRemoveAll(ctx context.Context, uid int64, parentGUID string) []*rigDetachResult {
-	_, _ = s.DB.SQL.ExecContext(ctx, `DELETE FROM rod_setting WHERE guid=? AND key IN ('rebait:0','rebait:1')`, parentGUID)
+	_, _ = s.DB.SQL.ExecContext(ctx, `DELETE FROM rod_setting WHERE guid=? AND key LIKE 'rebait:%'`, parentGUID)
 	rows, _ := s.DB.ListRigComponents(ctx, parentGUID)
 	comps := s.storedRigComponents(ctx, parentGUID)
 	seen := map[string]bool{}
@@ -2528,4 +2530,8 @@ func hexHead(b []byte, n int) string {
 		b = b[:n]
 	}
 	return fmt.Sprintf("%x", b)
+}
+
+func baitSlotCount(rigType int64) int {
+	return max(2, len(slotIndicesFor(rigType, catHook)))
 }
