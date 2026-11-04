@@ -3,7 +3,6 @@ package gameserver
 import (
 	"encoding/json"
 	"sync"
-	"time"
 
 	"rf4server/internal/store"
 )
@@ -211,7 +210,7 @@ func (s *Server) resumeFishingState(st *FishState) {
 			st.persist.recoverPending = true
 		}
 	}
-	if !st.CastActive || st.Resolved {
+	if !st.CastActive || st.Resolved || st.pushing != nil {
 		st.mu.Unlock()
 		return
 	}
@@ -220,8 +219,7 @@ func (s *Server) resumeFishingState(st *FishState) {
 			st.mu.Unlock()
 			return
 		}
-		uid := st.persist.uid
-		st.pendingTimer = time.AfterFunc(0, func() { s.repushPending14_14(uid) })
+		s.armPendingTimerLocked(st.persist.uid, st, 0)
 		st.mu.Unlock()
 		return
 	}
@@ -236,13 +234,6 @@ func (s *Server) resumeFishingState(st *FishState) {
 		// onBiteTimer 的落水保护仍会阻止过早判鱼。
 		due = st.CastTs
 	}
-	wait := time.Until(due)
-	if wait < 0 {
-		wait = 0
-	}
-	uid := st.persist.uid
-	st.BiteGen++
-	gen := st.BiteGen
-	st.biteTimer = time.AfterFunc(wait, func() { s.onBiteTimer(uid, gen) })
+	s.armBiteTimerLocked(st.persist.uid, st, due)
 	st.mu.Unlock()
 }
