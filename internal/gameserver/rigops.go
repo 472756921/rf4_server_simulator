@@ -873,6 +873,33 @@ func (s *Server) materializeHanditemChild(ctx context.Context, uid int64, parent
 	return childGUID, itemGUID
 }
 
+// baitFullStackRod 判断 parentGUID 是否适用钩饵整包装填。
+// 浮钓/沉底族单钩钓组整包上饵；多钩钓组（模板钩槽数 >1 或实际挂载钩 >1，
+// 如串钩、多钩水底）保持一钩一份的逐份拆分配饵。竿缺失或钓组类型未知时
+// 保守返回 false，维持原拆分路径。
+func (s *Server) baitFullStackRod(ctx context.Context, parentGUID string) bool {
+	if s.DB == nil || parentGUID == "" {
+		return false
+	}
+	prow, err := s.DB.GetItemByGUID(ctx, parentGUID)
+	if err != nil || prow == nil {
+		return false
+	}
+	rigType := s.rigTypeOfItem(ctx, prow)
+	if !baitFullStackRigTypes[rigType] {
+		return false
+	}
+	if len(slotIndicesFor(rigType, catHook)) > 1 || len(slotIndicesFor(rigType, catLure)) > 1 {
+		return false
+	}
+	// 模板可能不反映实际挂载：已挂第二口钩时同样降级（与
+	// consumeBaitEvent 的多钩分支用同一计数方式）。
+	if comps := s.storedRigComponents(ctx, parentGUID); len(rigCompKeysOfCategory(comps, catHook)) > 1 {
+		return false
+	}
+	return true
+}
+
 // setHanditemLoadedRef 将手持工具字段 f1 设为当前装填物 GUID；空字符串表示清空。
 // 客户端通过该字段判断装填状态。
 func (s *Server) setHanditemLoadedRef(ctx context.Context, parentGUID, itemGUID string) {
@@ -1003,18 +1030,31 @@ func (s *Server) rigSetComponent(ctx context.Context, uid int64, parentGUID stri
 		_ = s.DB.UpsertRig(ctx, parentGUID, uid, 1, "", "{}")
 	}
 
-	// 计件物品先拆出数量为 1 的挂载子实例；整堆挂载会导致客户端配重错误。
-	// 手持工具例外，需要保留整堆份数。
-	if opts.SplitStack {
-		itemGUID = s.splitMountableChild(ctx, uid, parentGUID, itemGUID)
-	}
-
 	// 800 快照素材：f0 新增，f1 更新（含竿），f2 移除原有子实例 GUID。
 	added := []*proto.Value(nil)
 	updated := []*proto.Value{}
 	var removed []string
 	materialized := false
-	if opts.HanditemFullStack {
+	// 计件物品挂载分三种：
+	//   * 浮钓族饵料（qty>1）：整包装填进新子实例，咬口由 consumeBaitEvent
+	//     逐份扣减，避免拆成单份后"每中一条鱼钩上就空、须手动重挂"
+	//     （2026-11-04 用户需求）。单份饵料不物化，就地挂载与拆分路径一致。
+	//   * 其余计件物品（钩、沉底族饵料等）：拆出数量为 1 的挂载子实例；
+	//     沉底族多钩需按钩逐份配饵。
+	//   * 手持工具（13/x）：整堆装填搬进新子实例（materializeHanditemChild
+	//     先例）。
+	// 注：整堆挂载曾在早期版本观察到客户端配重异常，浮钓饵整包的配重
+	// 显示需在游戏内复核。
+	if opts.SplitStack && itemCat == catBait && s.stackCountOf(ctx, it) > 1 && s.baitFullStackRod(ctx, parentGUID) {
+		g, srcRemoved := s.materializeHanditemChild(ctx, uid, parentGUID, itemGUID)
+		itemGUID = g
+		if srcRemoved != "" {
+			removed = append(removed, srcRemoved)
+			materialized = true
+		}
+	} else if opts.SplitStack {
+		itemGUID = s.splitMountableChild(ctx, uid, parentGUID, itemGUID)
+	} else if opts.HanditemFullStack {
 		g, srcRemoved := s.materializeHanditemChild(ctx, uid, parentGUID, itemGUID)
 		itemGUID = g
 		if srcRemoved != "" {
