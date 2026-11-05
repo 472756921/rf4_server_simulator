@@ -300,8 +300,9 @@ func (s *Server) resolveRecipe(ctx context.Context, key string) *store.Recipe {
 
 // ---- 9/1 制作闭环 ----
 
-// hCraft 处理 9/1 制作：解析配方、校验材料、事务内扣料、创建独立新实例并写流水。
-// 制作产出不并入已有同种堆，803.f1 返回新实例，f6 返回背包增量，f8 返回移除项。
+// hCraft 处理 9/1 制作：解析配方、校验材料、事务内扣料、产出入包并写流水。
+// 可计件产物并入已有同种堆，非计件产物保持独立实例；803.f1 返回产出
+// （合并后为整堆），f6 返回背包增量，f8 返回移除项。
 //
 // 未知配方、材料不足和入库失败均返回 803(false)，避免客户端等待缺失响应。
 func hCraft(ctx *Ctx) ([]byte, bool) {
@@ -327,7 +328,6 @@ func hCraft(ctx *Ctx) ([]byte, bool) {
 	}
 	uid := ctx.Sess.Userid
 	demands := parseDemands(recipe.MaterialsJSON)
-	isBaitCraft := strings.HasPrefix(recipe.RecipeID, "craft_bait_")
 	isLeaderCraft := strings.HasPrefix(recipe.RecipeID, "craft_leader_")
 
 	// 先在事务外构造物品；构造失败时尚未扣材料。
@@ -485,12 +485,12 @@ func hCraft(ctx *Ctx) ([]byte, bool) {
 		}
 	}
 
-	// 鱼饵和作者现有可堆叠物品一样并入同编号背包堆，避免每做一次多出一个 30 个的独立堆。
-	row, merged, err := grantPreparedItemTx(cctx, tx, producedRow, isBaitCraft)
+	// 可计件产物（面包、熟食、饲料等）并入已有同种背包堆，避免每次制作多出一个独立堆；
+	// 拟饵、PVA、引线等非计件产物不受影响，仍插入新实例。
+	row, _, err := grantPreparedItemTx(cctx, tx, producedRow, true)
 	if err != nil {
 		return fail("产出物入库失败", "output", outputID, "err", err)
 	}
-	_ = merged
 	if err := addTxnTx(cctx, tx, uid, "craft", outputID, "",
 		0, 0, fmt.Sprintf("recipe=%s qty=%d", recipe.RecipeID, times)); err != nil {
 		return fail("制作流水写入失败", "err", err)
