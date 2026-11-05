@@ -768,3 +768,90 @@ func TestCraftCookReplyCarriesSkillTree(t *testing.T) {
 		t.Fatalf("烹调术熟练度应 0.1，实得 %.3f err=%v", pts, err)
 	}
 }
+
+// TestCraftCountableProductsStack 验证可计件的制作产物会并入同一背包堆，
+// 而非计件产物（如 PVA 饵料板）仍保持独立实例。
+func TestCraftCountableProductsStack(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "craft-stack.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	importStaticForSkillsCraft(t, db, "item_def", "recipe")
+	ctx := context.Background()
+	srv := newSkillsCraftServer(t, db)
+	srv.randFloat = fixedRolls(0.9) // 固定不涨熟练度，避免干扰数量断言
+	uid := int64(2000007)
+	if _, err := db.EnsureProfile(ctx, uid); err != nil {
+		t.Fatal(err)
+	}
+	sess := &Session{ID: 1, Userid: uid, Srv: srv, log: logging.Discard()}
+	box := &handlerBox{srv: srv, sess: sess, main: 9, sub: 1}
+
+	craftOnce := func(recipe string, materials []craftSlot) {
+		t.Helper()
+		box.tree = proto.Args524(craftObj8(recipe, materials, 1))
+		body, ok := box.invoke(t)
+		if !ok {
+			t.Fatalf("%s 未处理", recipe)
+		}
+		v := decodeTreeValue(t, srv, body)
+		if !v.IsKind(proto.KindObj) || v.TypeID != 803 || u64Of(v.Fields[0].Num) != 1 {
+			t.Fatalf("%s 制作应成功，实得 %v/%d", recipe, v.Kind, v.TypeID)
+		}
+	}
+	stackRows := func(itemID string) (rows, qty int64) {
+		t.Helper()
+		if err := db.SQL.QueryRow(`SELECT COUNT(*), COALESCE(SUM(qty),0) FROM item
+			WHERE uid=? AND item_id=? AND container='backpack'`, uid, itemID).Scan(&rows, &qty); err != nil {
+			t.Fatal(err)
+		}
+		return rows, qty
+	}
+
+	// 烹调：food_egg → boiled_egg（类别 26），两次应合成 1 堆 2 个。
+	for i := 0; i < 2; i++ {
+		egg, err := srv.CreateItem(ctx, uid, "food_egg", "backpack", 1)
+		if err != nil {
+			t.Fatalf("第 %d 次创建 food_egg 失败: %v", i+1, err)
+		}
+		srv.alignItemRowQty(ctx, egg)
+		craftOnce("craft_cook_boiled_egg", nil)
+	}
+	if rows, qty := stackRows("boiled_egg"); rows != 1 || qty != 2 {
+		t.Fatalf("两次烹调应合并成 1 堆 2 个，实得 rows=%d qty=%d", rows, qty)
+	}
+
+	// 饲料：mix_combi → feedcompleted（类别 46），两次应合成 1 堆 2。
+	feedSlot := []craftSlot{{
+		ItemID: "craft_feed_generic_mix_1",
+		GUID:   "00112233445566778899aabbccddeeff",
+	}}
+	for i := 0; i < 2; i++ {
+		mix, err := srv.CreateItem(ctx, uid, "mix_combi", "backpack", 1)
+		if err != nil {
+			t.Fatalf("第 %d 次创建 mix_combi 失败: %v", i+1, err)
+		}
+		srv.alignItemRowQty(ctx, mix)
+		craftOnce("craft_feed_universal", feedSlot)
+	}
+	if rows, qty := stackRows("feedcompleted"); rows != 1 || qty != 2 {
+		t.Fatalf("两次饲料制作应合并成 1 堆 2 个，实得 rows=%d qty=%d", rows, qty)
+	}
+
+	// PVA 饵料板：hvz_pva_string → pvas_b10（类别 61，非计件），两次应保持 2 个独立实例。
+	for i := 0; i < 2; i++ {
+		line, err := srv.CreateItem(ctx, uid, "hvz_pva_string", "backpack", 1)
+		if err != nil {
+			t.Fatalf("第 %d 次创建 hvz_pva_string 失败: %v", i+1, err)
+		}
+		srv.alignItemRowQty(ctx, line)
+		craftOnce("craft_pva_stinger_boil_10", nil)
+	}
+	if rows, qty := stackRows("pvas_b10"); rows != 2 || qty != 2 {
+		t.Fatalf("两次 PVA 制作应保持 2 个独立实例，实得 rows=%d qty=%d", rows, qty)
+	}
+}
