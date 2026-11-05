@@ -1438,7 +1438,6 @@ func (s *Server) onBiteTimerTicket(uid int64, ticket fishingTimerTicket) {
 		gear, generation := st.GearGuid, st.castGeneration
 		st.mu.Unlock()
 		s.pushPendingBite(sess, st, f, gear, generation)
-		sess.pushChatProbe(27, 17, "", nil)
 		return
 	}
 	if !s.canFishWithBait(s.dbCtx(), uid, st.GearGuid) {
@@ -1477,8 +1476,6 @@ func (s *Server) onBiteTimerTicket(uid int64, ticket fishingTimerTicket) {
 	st.mu.Unlock()
 
 	s.pushPendingBite(sess, st, f, gear, generation)
-	// 官方聊天模板播报咬钩（k17"player 鱼咬钩了"）。
-	sess.pushChatProbe(27, 17, "", nil)
 }
 
 // repushPending14_14 在 14/12 f0=3 时于 6 秒后重推同一尾 pending 鱼，
