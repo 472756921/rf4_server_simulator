@@ -30,7 +30,7 @@ func TestBaitMountAvailForRigTable(t *testing.T) {
 		t.Fatalf("雪人钓组可选集 = %d，期望 %d", got, snowman)
 	}
 	popup := int64(baitMountPopupFamily)
-	for _, rt := range []int64{26, 27, 28} {
+	for _, rt := range []int64{26, 27, 28, 32} {
 		if got := baitMountAvailForRig(rt, 0); got != popup {
 			t.Fatalf("钓组 %d 可选集 = %d，期望 pop-up 族 %d", rt, got, popup)
 		}
@@ -43,8 +43,8 @@ func TestBaitMountAvailForRigTable(t *testing.T) {
 	if got := baitMountAvailForRig(34, 0); got != zig {
 		t.Fatalf("Zig 钓组可选集 = %d，期望 %d", got, zig)
 	}
-	// 30/31/32 暂未编排，维持过渡值。
-	for _, rt := range []int64{30, 31, 32} {
+	// 30/31 暂未编排，维持过渡值。
+	for _, rt := range []int64{30, 31} {
 		if got := baitMountAvailForRig(rt, 0); got != base|baitMountPopupFamily {
 			t.Fatalf("钓组 %d 可选集 = %d，期望 %d", rt, got, base|baitMountPopupFamily)
 		}
