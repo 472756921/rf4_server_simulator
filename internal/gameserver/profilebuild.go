@@ -110,6 +110,13 @@ func (s *Server) BuildProfile307(ctx context.Context, uid int64) (*proto.Value, 
 	for _, pl := range places {
 		placeItems = append(placeItems, proto.BytesOf([]byte(pl)))
 	}
+	// f20 携带已拥有房屋（实测 2026-11-05：客户端据此把已购房屋显示为
+	// "进入"；f22 房屋条目无效）。编码与 f22 一致，为地点/物品键的 hex。
+	houses, _ := s.DB.HouseAccessList(ctx, uid)
+	houseItems := make([]*proto.Value, 0, len(houses))
+	for _, h := range houses {
+		houseItems = append(houseItems, proto.BytesOf([]byte(h)))
+	}
 
 	membership := store.MembershipAt(p.Membership, p.MembershipExp, time.Now().Unix())
 	var membershipKind uint32
@@ -156,7 +163,7 @@ func (s *Server) BuildProfile307(ctx context.Context, uid int64) (*proto.Value, 
 		17: proto.StrVal(p.Email),
 		18: proto.U32(uint32(p.Role)),
 		19: proto.U64(uint64(p.Bank)),
-		20: proto.ArrayOf(nil),
+		20: proto.ArrayOf(hexOf(houseItems)),
 		21: proto.Str(nil),
 		22: proto.ArrayOf(hexOf(placeItems)),
 		23: proto.Args(proto.S("181")),

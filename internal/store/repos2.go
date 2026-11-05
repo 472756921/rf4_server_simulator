@@ -246,9 +246,27 @@ func (d *DB) CatchLogTotals(ctx context.Context, uid int64) (total, trophy, supe
 
 // ---- 地点买断 ----
 
-// PlaceAccessList 玩家已买断地点。
+// PlaceAccessList 玩家已买断地点（档案 307 f22）。
 func (d *DB) PlaceAccessList(ctx context.Context, uid int64) ([]string, error) {
 	rows, err := d.SQL.QueryContext(ctx, `SELECT place FROM place_access WHERE uid=? AND kind='buyout'`, uid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// HouseAccessList 玩家已拥有房屋（place 存房屋 item_id，档案 307 f20）。
+func (d *DB) HouseAccessList(ctx context.Context, uid int64) ([]string, error) {
+	rows, err := d.SQL.QueryContext(ctx, `SELECT place FROM place_access WHERE uid=? AND kind='house'`, uid)
 	if err != nil {
 		return nil, err
 	}
