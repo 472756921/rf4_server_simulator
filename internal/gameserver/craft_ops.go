@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -49,6 +48,30 @@ const (
 
 // maxCraftTimes 单次制作的份数上限（防止异常 qty 把材料一次扣光）。
 const maxCraftTimes = 100
+
+// 制作配方对应的技能大类（捕获鱼饵 4 见 baitdig.go）。
+const (
+	craftCookSkillID = 6 // 烹调术
+	craftFeedSkillID = 7 // 配置饵料
+	craftLureSkillID = 8 // 制作鱼饵（手工饵）
+)
+
+// craftSkillCatForRecipe 将配方映射到技能大类；官方无对应技能的配方返回 0。
+func craftSkillCatForRecipe(recipeID string) int64 {
+	switch {
+	case strings.HasPrefix(recipeID, "craft_bait_"):
+		return captureBaitSkillID
+	case strings.HasPrefix(recipeID, "craft_cook_"):
+		return craftCookSkillID
+	case strings.HasPrefix(recipeID, "craft_feed_"),
+		strings.HasPrefix(recipeID, "craft_pva_"),
+		recipeID == "craft_crushed_boils":
+		return craftFeedSkillID
+	case strings.HasPrefix(recipeID, "craft_lure_"):
+		return craftLureSkillID
+	}
+	return 0
+}
 
 // bundleCategory 套盒类别（shop_rules.BUNDLE_CATEGORY）。
 const bundleCategory = 55
@@ -475,22 +498,11 @@ func hCraft(ctx *Ctx) ([]byte, bool) {
 	if err := tx.Commit(); err != nil {
 		return fail("事务提交失败", "err", err)
 	}
-	masteryGain := 0.0
-	if isBaitCraft {
-		before, skillErr := srv.DB.GetSkillPoints(cctx, uid, captureBaitSkillID)
-		if skillErr != nil {
-			ctx.Log.Warn("9/1 读取捕获鱼饵熟练度失败", "err", skillErr)
-		} else if before < baitMasteryCap {
-			after := math.Min(baitMasteryCap, math.Round((before+baitMasteryStep)*10)/10)
-			if err := srv.DB.AddSkillPoints(cctx, uid, captureBaitSkillID, baitMasteryStep); err != nil {
-				ctx.Log.Warn("9/1 捕获鱼饵熟练度写入失败", "err", err)
-			} else {
-				masteryGain = after - before
-			}
-		}
-	}
+	skillCat := craftSkillCatForRecipe(recipe.RecipeID)
+	masteryGain := srv.awardCraftProficiency(cctx, uid, skillCat, times)
 	ctx.Log.Info("9/1 制作入库", "output", outputID, "qty", times,
-		"took", len(touched), "recipe", recipe.RecipeID, "mastery_gain", masteryGain)
+		"took", len(touched), "recipe", recipe.RecipeID,
+		"skill", skillCat, "mastery_gain", masteryGain)
 
 	produced := make([]*proto.Value, 0, 1)
 	if tree, terr := srv.ItemToTree(cctx, row); terr == nil {
@@ -506,15 +518,20 @@ func hCraft(ctx *Ctx) ([]byte, bool) {
 			upsert = append(upsert, tree)
 		}
 	}
+	var progress, skillTree *proto.Value
+	if masteryGain > 0 {
+		progress = masteryGainValue(skillCat, masteryGain)
+		skillTree = srv.buildSingleSkill312(cctx, uid, skillCat)
+	}
 	ctx.AfterResponse(func() {
 		if masteryGain > 0 {
-			ctx.Sess.Push2_4SkillTree("制作鱼饵 " + outputID)
+			ctx.Sess.Push2_4SkillTree("制作 " + outputID)
 		}
 		if len(produced) > 0 {
 			ctx.Sess.Push(4, 22, proto.Args(proto.S("61"), produced...))
 		}
 	})
-	return srv.replyCraftResultWithMastery(ctx, true, produced, upsert, removed, captureBaitSkillID, masteryGain)
+	return srv.replyCraftResultWithSkill(ctx, true, produced, upsert, removed, progress, skillTree)
 }
 
 // alignItemRowQty 将 item.qty 与可计件物品字段中的数量对齐，非计件物品保持 1。
@@ -1053,16 +1070,6 @@ func craftDemandObjs(recipe *store.Recipe) []*proto.Value {
 // f1 是制作结果预览，f6 是背包增量（产出 + 剩余材料），f8 是耗尽移除的 GUID。
 func (s *Server) replyCraftResult(ctx *Ctx, ok bool, produced, upsert []*proto.Value, removed []string) ([]byte, bool) {
 	return s.replyCraftResultWithSkill(ctx, ok, produced, upsert, removed, nil, nil)
-}
-
-// replyCraftResultWithMastery 保留固定熟练度增长调用，并复用统一的 803 回包构造。
-func (s *Server) replyCraftResultWithMastery(ctx *Ctx, ok bool, produced, upsert []*proto.Value,
-	removed []string, skillID int64, masteryGain float64) ([]byte, bool) {
-	var progress *proto.Value
-	if masteryGain > 0 {
-		progress = masteryGainValue(skillID, masteryGain)
-	}
-	return s.replyCraftResultWithSkill(ctx, ok, produced, upsert, removed, progress, nil)
 }
 
 // replyCraftResultWithSkill 额外写入 f2 310 进度块和 f3 单大类技能树。

@@ -2,6 +2,7 @@ package gameserver
 
 import (
 	"context"
+	"math"
 	"path/filepath"
 	"testing"
 
@@ -33,6 +34,16 @@ func newSkillsCraftServer(t *testing.T, db *store.DB) *Server {
 	srv := NewServer(config.Game{Tunnel: config.Tunnel{PSK: "probe"}}, logging.Discard(), nil)
 	srv.SetDB(db)
 	return srv
+}
+
+// fixedRolls 返回按顺序循环取值的随机源，用于让熟练度概率判定可复现。
+func fixedRolls(vals ...float64) func() float64 {
+	i := 0
+	return func() float64 {
+		v := vals[i%len(vals)]
+		i++
+		return v
+	}
 }
 
 // decodeTreeValue 解码响应体；失败时终止测试。
@@ -245,6 +256,7 @@ func TestCraftFlow(t *testing.T) {
 	importStaticForSkillsCraft(t, db, "item_def", "recipe")
 	ctx := context.Background()
 	srv := newSkillsCraftServer(t, db)
+	srv.randFloat = fixedRolls(0.1, 0.9)
 	// 独立 uid、不播种 starter（背包装料可控）
 	uid := int64(2000002)
 	if _, err := db.EnsureProfile(ctx, uid); err != nil {
@@ -475,6 +487,7 @@ func TestBaitCraftStacksAndMastery(t *testing.T) {
 	importStaticForSkillsCraft(t, db, "item_def", "recipe")
 	ctx := context.Background()
 	srv := newSkillsCraftServer(t, db)
+	srv.randFloat = fixedRolls(0.1, 0.9)
 	uid := int64(2000004)
 	if _, err := db.EnsureProfile(ctx, uid); err != nil {
 		t.Fatal(err)
@@ -607,4 +620,151 @@ func (b *handlerBox) invoke(t *testing.T) ([]byte, bool) {
 		CallID: 1, Tree: b.tree, DecodeOK: b.tree != nil,
 		Log: logging.Discard(),
 	})
+}
+
+// TestCraftSkillCatForRecipe 校验四类配方到技能大类的映射。
+func TestCraftSkillCatForRecipe(t *testing.T) {
+	cases := []struct {
+		recipe string
+		want   int64
+	}{
+		{"craft_bait_bread", captureBaitSkillID},
+		{"craft_cook_boiled_egg", craftCookSkillID},
+		{"craft_feed_test", craftFeedSkillID},
+		{"craft_pva_stinger_boil_10", craftFeedSkillID},
+		{"craft_crushed_boils", craftFeedSkillID},
+		{"craft_lure_jerkfat_100_001", craftLureSkillID},
+		{"craft_leader_10", 0},
+		{"craft_fish_board_l_01", 0},
+	}
+	for _, c := range cases {
+		if got := craftSkillCatForRecipe(c.recipe); got != c.want {
+			t.Fatalf("craftSkillCatForRecipe(%s)=%d, want %d", c.recipe, got, c.want)
+		}
+	}
+}
+
+// TestCraftProficiencyByRecipeFamily 校验四类技能按件概率增长、未命中与上限处理。
+func TestCraftProficiencyByRecipeFamily(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "craft-prof.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	srv := newSkillsCraftServer(t, db)
+	uid := int64(2000005)
+	if _, err := db.EnsureProfile(ctx, uid); err != nil {
+		t.Fatal(err)
+	}
+
+	srv.randFloat = fixedRolls(0.1, 0.9)
+	for _, cat := range []int64{craftCookSkillID, craftFeedSkillID, craftLureSkillID} {
+		if gain := srv.awardCraftProficiency(ctx, uid, cat, 1); math.Abs(gain-0.1) > 1e-9 {
+			t.Fatalf("技能 %d 单件制作应加 0.1，实得 %.3f", cat, gain)
+		}
+		if pts, err := db.GetSkillPoints(ctx, uid, cat); err != nil || pts != 0.1 {
+			t.Fatalf("技能 %d 应写入 0.1，实得 %.3f err=%v", cat, pts, err)
+		}
+	}
+
+	// 无对应技能的配方不写库。
+	if gain := srv.awardCraftProficiency(ctx, uid, 0, 1); gain != 0 {
+		t.Fatalf("无对应技能的配方不应加分，实得 %.3f", gain)
+	}
+	if pts, _ := db.GetSkillPoints(ctx, uid, 0); pts != 0 {
+		t.Fatalf("技能 0 不应写入，实得 %.3f", pts)
+	}
+
+	// 未命中概率时熟练度不变。
+	srv.randFloat = fixedRolls(0.95, 0.9)
+	if gain := srv.awardCraftProficiency(ctx, uid, craftCookSkillID, 1); gain != 0 {
+		t.Fatalf("未命中时不应加分，实得 %.3f", gain)
+	}
+	if pts, _ := db.GetSkillPoints(ctx, uid, craftCookSkillID); pts != 0.1 {
+		t.Fatalf("未命中后应保持 0.1，实得 %.3f", pts)
+	}
+
+	// 按件累计：5 件全中 = 0.5。
+	srv.randFloat = fixedRolls(0.1, 0.9)
+	if gain := srv.awardCraftProficiency(ctx, uid, craftCookSkillID, 5); math.Abs(gain-0.5) > 1e-9 {
+		t.Fatalf("5 件应加 0.5，实得 %.3f", gain)
+	}
+	if pts, _ := db.GetSkillPoints(ctx, uid, craftCookSkillID); math.Abs(pts-0.6) > 1e-9 {
+		t.Fatalf("累计后应为 0.6，实得 %.3f", pts)
+	}
+
+	// 接近上限：最多补到 100。
+	if err := db.AddSkillPoints(ctx, uid, craftLureSkillID, 99.8); err != nil {
+		t.Fatal(err)
+	}
+	srv.randFloat = fixedRolls(0.1, 0.0)
+	if gain := srv.awardCraftProficiency(ctx, uid, craftLureSkillID, 1); math.Abs(gain-0.1) > 1e-9 {
+		t.Fatalf("接近上限时应只加 0.1，实得 %.3f", gain)
+	}
+	if pts, _ := db.GetSkillPoints(ctx, uid, craftLureSkillID); math.Abs(pts-100) > 1e-9 {
+		t.Fatalf("应到上限 100，实得 %.3f", pts)
+	}
+}
+
+// TestCraftCookReplyCarriesSkillTree 校验烹调制作 803 回包携带 310 进度与 312 技能树。
+func TestCraftCookReplyCarriesSkillTree(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "cook-skill.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	importStaticForSkillsCraft(t, db, "item_def", "recipe")
+	ctx := context.Background()
+	srv := newSkillsCraftServer(t, db)
+	srv.randFloat = fixedRolls(0.1, 0.9)
+	uid := int64(2000006)
+	if _, err := db.EnsureProfile(ctx, uid); err != nil {
+		t.Fatal(err)
+	}
+	sess := &Session{ID: 1, Userid: uid, Srv: srv, log: logging.Discard()}
+	box := &handlerBox{srv: srv, sess: sess, main: 9, sub: 1}
+	egg, err := srv.CreateItem(ctx, uid, "food_egg", "backpack", 1)
+	if err != nil {
+		t.Fatalf("food_egg 创建失败: %v", err)
+	}
+	srv.alignItemRowQty(ctx, egg)
+	box.tree = proto.Args524(craftObj8("craft_cook_boiled_egg", nil, 1))
+	body, ok := box.invoke(t)
+	if !ok {
+		t.Fatal("9/1 未处理")
+	}
+	v := decodeTreeValue(t, srv, body)
+	if !v.IsKind(proto.KindObj) || v.TypeID != 803 || u64Of(v.Fields[0].Num) != 1 {
+		t.Fatalf("烹调制作应成功返回 803，实得 %v/%d", v.Kind, v.TypeID)
+	}
+	p := v.Fields[2].Val
+	if p == nil || p.Kind != proto.KindObj || p.TypeID != 310 {
+		t.Fatalf("803.f2 应带 310 熟练度块，实得 %+v", p)
+	}
+	if got := u64Of(p.Fields[2].Num); got != uint64(craftCookSkillID) {
+		t.Fatalf("310 技能应为 %d，实得 %d", craftCookSkillID, got)
+	}
+	if got := float32(math.Float32frombits(uint32(u64Of(p.Fields[3].Num)))); math.Abs(float64(got)-0.1) > 1e-6 {
+		t.Fatalf("310 增量应 0.1，实得 %.3f", got)
+	}
+	st := v.Fields[3].Val
+	if st == nil || st.Kind != proto.KindObj || st.TypeID != 312 {
+		t.Fatalf("803.f3 应带 312 技能树，实得 %+v", st)
+	}
+	if got := u64Of(st.Fields[0].Num); got != uint64(craftCookSkillID) {
+		t.Fatalf("312 技能应为 %d，实得 %d", craftCookSkillID, got)
+	}
+	if got := float32(math.Float32frombits(uint32(u64Of(st.Fields[1].Num)))); math.Abs(float64(got)-0.1) > 1e-6 {
+		t.Fatalf("312 熟练度应 0.1，实得 %.3f", got)
+	}
+	if pts, err := db.GetSkillPoints(ctx, uid, craftCookSkillID); err != nil || pts != 0.1 {
+		t.Fatalf("烹调术熟练度应 0.1，实得 %.3f err=%v", pts, err)
+	}
 }
